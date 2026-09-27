@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: ledgerlens-backend
+    runtime: python
+    region: frankfurt
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: AI_PROVIDER
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+      - key: GROQ_MODEL
+        value: llama-3.2-11b-vision-preview
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: MODERATION_PROVIDER
+        value: auto
+      - key: REVIEW_THRESHOLD
+        value: "0.75"
+      - key: UPLOAD_DIR
+        value: uploads
+      - key: DATABASE_PATH
+        value: data/cevondocs.db
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        value: https://gzhiltwyuhclzbhaypzd.supabase.co
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: cevondocs
+      - key: SUPABASE_DOCUMENTS_TABLE
+        value: cevondocs_documents

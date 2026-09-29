@@ -42,6 +42,7 @@ ON CONFLICT (id) DO UPDATE SET
 CREATE TABLE IF NOT EXISTS public.cevondocs_documents (
     id TEXT PRIMARY KEY,
     product_id TEXT NOT NULL DEFAULT 'cevondocs' REFERENCES public.products(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     filename TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('auto_approved', 'pending_review', 'approved', 'blocked', 'failed')),
     extracted_json TEXT,
@@ -55,24 +56,41 @@ CREATE TABLE IF NOT EXISTS public.cevondocs_documents (
 CREATE INDEX IF NOT EXISTS idx_cevondocs_documents_status ON public.cevondocs_documents(status);
 CREATE INDEX IF NOT EXISTS idx_cevondocs_documents_created_at ON public.cevondocs_documents(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_cevondocs_documents_product_id ON public.cevondocs_documents(product_id);
+CREATE INDEX IF NOT EXISTS idx_cevondocs_documents_user_id ON public.cevondocs_documents(user_id);
+CREATE INDEX IF NOT EXISTS idx_cevondocs_documents_user_status ON public.cevondocs_documents(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_cevondocs_documents_user_created ON public.cevondocs_documents(user_id, created_at DESC);
 
 ALTER TABLE public.cevondocs_documents ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies WHERE tablename = 'cevondocs_documents' AND policyname = 'Allow public read on cevondocs_documents'
-    ) THEN
-        CREATE POLICY "Allow public read on cevondocs_documents" ON public.cevondocs_documents FOR SELECT TO public USING (true);
-    END IF;
-END
-$$;
+-- User-scoped RLS Policies
+DROP POLICY IF EXISTS "Allow public read on cevondocs_documents" ON public.cevondocs_documents;
+
+DROP POLICY IF EXISTS "Users can select own documents" ON public.cevondocs_documents;
+CREATE POLICY "Users can select own documents"
+ON public.cevondocs_documents FOR SELECT TO authenticated
+USING ((select auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own documents" ON public.cevondocs_documents;
+CREATE POLICY "Users can insert own documents"
+ON public.cevondocs_documents FOR INSERT TO authenticated
+WITH CHECK ((select auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "Users can update own documents" ON public.cevondocs_documents;
+CREATE POLICY "Users can update own documents"
+ON public.cevondocs_documents FOR UPDATE TO authenticated
+USING ((select auth.uid()) = user_id)
+WITH CHECK ((select auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "Users can delete own documents" ON public.cevondocs_documents;
+CREATE POLICY "Users can delete own documents"
+ON public.cevondocs_documents FOR DELETE TO authenticated
+USING ((select auth.uid()) = user_id);
 
 -- ------------------------------------------------------------
 -- 3. Backward-Compatible View for Legacy/Generic Access
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW public.documents AS
-SELECT id, product_id, filename, status, extracted_json, reviewed_json, created_at, image_url, watermarked_url
+SELECT id, product_id, user_id, filename, status, extracted_json, reviewed_json, created_at, image_url, watermarked_url
 FROM public.cevondocs_documents;
 
 -- ------------------------------------------------------------

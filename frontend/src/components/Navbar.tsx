@@ -1,8 +1,10 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { HealthResponse } from '@/types';
-import { Upload, CheckSquare, History, Sliders, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Upload, CheckSquare, History, Sliders, CheckCircle2, AlertCircle, LogOut } from 'lucide-react';
+import { useAuth } from '@/lib/auth/AuthContext';
 
 interface NavbarProps {
   activeTab: string;
@@ -17,6 +19,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   health,
   pendingCount,
 }) => {
+  const { user, isAuthenticated, signOut } = useAuth();
+
   const tabs = [
     { id: 'upload', label: 'Upload & Ingest', icon: Upload },
     {
@@ -99,6 +103,46 @@ export const Navbar: React.FC<NavbarProps> = ({
               </>
             )}
           </div>
+
+          {/* User Auth State & Account Nav */}
+          {isAuthenticated ? (
+            <div className="flex items-center gap-2">
+              <Link
+                href="/account"
+                className="h-8 px-2.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 hover:text-white inline-flex items-center gap-2 transition-colors"
+                title="Account Settings"
+              >
+                <div className="w-5 h-5 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-200">
+                  {user?.email ? user.email.slice(0, 2).toUpperCase() : 'CX'}
+                </div>
+                <span className="hidden sm:inline font-mono text-[11px] max-w-[120px] truncate">
+                  {user?.email?.split('@')[0]}
+                </span>
+              </Link>
+              <button
+                onClick={() => signOut()}
+                className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white inline-flex items-center justify-center transition-colors"
+                title="Sign Out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Link
+                href="/auth/login"
+                className="h-8 px-3 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-medium inline-flex items-center gap-1.5 transition-colors"
+              >
+                <span>Sign In</span>
+              </Link>
+              <Link
+                href="/auth/signup"
+                className="h-8 px-3 rounded-md bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
+              >
+                <span>Sign Up</span>
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </header>

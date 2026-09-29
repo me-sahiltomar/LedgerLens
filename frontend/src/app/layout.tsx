@@ -33,6 +33,8 @@ export const viewport: Viewport = {
   themeColor: '#09090b',
 };
 
+import { AuthProvider } from '@/lib/auth/AuthContext';
+
 export default function RootLayout({
   children,
 }: {
@@ -41,7 +43,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${inter.variable}`}>
       <body className="bg-[#09090b] text-zinc-100 min-h-screen antialiased selection:bg-zinc-800 selection:text-white flex flex-col font-sans">
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

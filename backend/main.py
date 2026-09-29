@@ -13,7 +13,8 @@ import time
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional
-from fastapi import FastAPI, HTTPException, UploadFile, File, Response
+from fastapi import FastAPI, HTTPException, UploadFile, File, Response, Depends, Query, status
+from fastapi.security import HTTPAuthorizationCredentials
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 import config
@@ -26,6 +27,7 @@ import confidence
 import watermark
 import pii
 import metrics
+from auth import get_current_user, AuthUser, verify_token, bearer_scheme
 from schemas import (
     IngestResponse,
     ReviewResponse,
@@ -153,7 +155,10 @@ def get_metrics():
 
 
 @app.post("/ingest", response_model=IngestResponse)
-def ingest(file: UploadFile = File(...)):
+def ingest(
+    file: UploadFile = File(...),
+    current_user: AuthUser = Depends(get_current_user),
+):
     filename = file.filename or ""
     ext = Path(filename).suffix.lower()
     allowed_exts = {".jpg", ".jpeg", ".png"}
@@ -216,21 +221,21 @@ def ingest(file: UploadFile = File(...)):
     # 2. Save Uploaded Image
     doc_id = utils.generate_id()
     saved_path = utils.save_upload(image_bytes, Path(config.UPLOAD_DIR), doc_id, filename)
-    logger.info(f"Ingested file '{filename}' as doc_id '{doc_id}' at {saved_path}")
+    logger.info(f"Ingested file '{filename}' as doc_id '{doc_id}' for user '{current_user.id}' at {saved_path}")
 
     # 3. Apply Watermark Provenance Stamp (saved separately as watermarked.png)
     watermarked_path = Path(config.UPLOAD_DIR) / doc_id / "watermarked.png"
     watermark.watermark_image(saved_path, doc_id, watermarked_path)
 
-    # 3b. Remote Cloud Persistence (Supabase Storage)
+    # 3b. Remote Cloud Persistence (Supabase Storage namespaced by user_id)
     image_url = None
     watermarked_url = None
     if config.ENABLE_SUPABASE:
         mime = "image/jpeg" if ext in [".jpg", ".jpeg"] else "image/png"
-        image_url = storage.upload_file(image_bytes, f"{doc_id}/original{ext}", content_type=mime)
+        image_url = storage.upload_file(image_bytes, f"{current_user.id}/{doc_id}/original{ext}", content_type=mime)
         if watermarked_path.exists():
             watermarked_url = storage.upload_file(
-                watermarked_path.read_bytes(), f"{doc_id}/watermarked.png", content_type="image/png"
+                watermarked_path.read_bytes(), f"{current_user.id}/{doc_id}/watermarked.png", content_type="image/png"
             )
 
     # 4. Vision Extraction via Provider Router & Extraction Latency Measurement
@@ -278,7 +283,7 @@ def ingest(file: UploadFile = File(...)):
             )
 
         logger.info(
-            f"Extraction completed for doc '{doc_id}'. Provider: '{config.AI_PROVIDER}', "
+            f"Extraction completed for doc '{doc_id}'. User: '{current_user.id}', Provider: '{config.AI_PROVIDER}', "
             f"Latency: {t_ext_elapsed:.3f}s, Total Tokens: {total_tokens}, Status: '{status}'"
         )
     except CevonDocsError:
@@ -302,7 +307,7 @@ def ingest(file: UploadFile = File(...)):
     if extracted_json_str:
         logger.info(f"Extracted payload for doc '{doc_id}': {pii.redact_pii(extracted_json_str)}")
 
-    # 7. Database Persistence (Supabase + Local SQLite)
+    # 7. Database Persistence (Supabase + Local SQLite) scoped to current_user.id
     db.insert_document(
         doc_id=doc_id,
         filename=filename,
@@ -311,6 +316,7 @@ def ingest(file: UploadFile = File(...)):
         created_at=created_at,
         image_url=image_url,
         watermarked_url=watermarked_url,
+        user_id=current_user.id,
     )
 
     return IngestResponse(
@@ -324,12 +330,15 @@ def ingest(file: UploadFile = File(...)):
 
 
 @app.get("/history")
-def history(limit: int = 50):
+def history(
+    limit: int = 50,
+    current_user: AuthUser = Depends(get_current_user),
+):
     """
-    Returns the extraction history for all processed documents.
-    Retrieves from Supabase or local SQLite.
+    Returns the extraction history for the authenticated user.
+    Retrieves from Supabase or local SQLite scoped to current_user.id.
     """
-    rows = db.get_history(limit=limit)
+    rows = db.get_history(user_id=current_user.id, limit=limit)
 
     result = []
     for r in rows:
@@ -353,16 +362,19 @@ def history(limit: int = 50):
 
 
 @app.get("/review", response_model=ReviewResponse)
-def review(document_id: Optional[str] = None):
+def review(
+    document_id: Optional[str] = None,
+    current_user: AuthUser = Depends(get_current_user),
+):
     """
-    Returns pending review documents.
+    Returns pending review documents for the authenticated user.
     Derives flagged fields at query time via confidence.route_document.
     """
     if document_id:
-        doc = db.get_document(document_id)
+        doc = db.get_document(document_id, user_id=current_user.id)
         rows = [doc] if doc and doc.get("status") == "pending_review" else []
     else:
-        rows = db.get_pending()
+        rows = db.get_pending(user_id=current_user.id)
 
     review_items = []
     for r in rows:
@@ -385,22 +397,25 @@ def review(document_id: Optional[str] = None):
 
 
 @app.post("/approve", response_model=ApproveResponse)
-def approve(req: ApproveRequest):
+def approve(
+    req: ApproveRequest,
+    current_user: AuthUser = Depends(get_current_user),
+):
     """
-    Approves a document pending review with human-corrected fields.
+    Approves a document pending review with human-corrected fields for the authenticated user.
     """
-    existing = db.get_document(req.document_id)
+    existing = db.get_document(req.document_id, user_id=current_user.id)
     if not existing:
-        raise HTTPException(status_code=404, detail=f"Document '{req.document_id}' not found.")
+        raise HTTPException(status_code=404, detail=f"Document '{req.document_id}' not found or access denied.")
 
     reviewed_json_str = json.dumps(req.reviewed_data)
-    success = db.approve_document(req.document_id, reviewed_json_str)
+    success = db.approve_document(req.document_id, reviewed_json_str, user_id=current_user.id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to approve document in database.")
 
     # PII Redacted Logging
     logger.info(
-        f"Approved document '{req.document_id}'. Reviewed Data: {pii.redact_pii(reviewed_json_str)}"
+        f"Approved document '{req.document_id}' by user '{current_user.id}'. Reviewed Data: {pii.redact_pii(reviewed_json_str)}"
     )
 
     return ApproveResponse(
@@ -411,22 +426,29 @@ def approve(req: ApproveRequest):
 
 
 @app.get("/documents/{doc_id}/image")
-def get_document_image(doc_id: str, image_type: str = "watermarked"):
+def get_document_image(
+    doc_id: str,
+    image_type: str = "watermarked",
+    current_user: AuthUser = Depends(get_current_user),
+):
     """
-    Returns the document image file (watermarked or original).
+    Returns the document image file (watermarked or original), verifying ownership.
+    Accepts authentication via Authorization header Bearer token or URL token query parameter.
     Redirects to Supabase CDN URL if available, or serves local file.
     """
+    doc = db.get_document(doc_id, user_id=current_user.id)
+    if not doc:
+        raise HTTPException(status_code=404, detail=f"Document '{doc_id}' not found or access denied.")
+
     # 1. Supabase CDN redirect if document has remote storage URL
-    doc = db.get_document(doc_id)
-    if doc:
-        if image_type == "watermarked" and doc.get("watermarked_url"):
-            return RedirectResponse(url=doc["watermarked_url"], status_code=307)
-        elif image_type == "original" and doc.get("image_url"):
-            return RedirectResponse(url=doc["image_url"], status_code=307)
-        elif doc.get("watermarked_url"):
-            return RedirectResponse(url=doc["watermarked_url"], status_code=307)
-        elif doc.get("image_url"):
-            return RedirectResponse(url=doc["image_url"], status_code=307)
+    if image_type == "watermarked" and doc.get("watermarked_url"):
+        return RedirectResponse(url=doc["watermarked_url"], status_code=307)
+    elif image_type == "original" and doc.get("image_url"):
+        return RedirectResponse(url=doc["image_url"], status_code=307)
+    elif doc.get("watermarked_url"):
+        return RedirectResponse(url=doc["watermarked_url"], status_code=307)
+    elif doc.get("image_url"):
+        return RedirectResponse(url=doc["image_url"], status_code=307)
 
     # 2. Local disk fallback
     doc_dir = Path(config.UPLOAD_DIR) / doc_id

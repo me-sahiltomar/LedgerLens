@@ -30,6 +30,7 @@ def _init_sqlite(db_path: str = config.DATABASE_PATH) -> None:
             """
             CREATE TABLE IF NOT EXISTS documents (
                 id TEXT PRIMARY KEY,
+                user_id TEXT,
                 filename TEXT NOT NULL,
                 status TEXT NOT NULL,
                 extracted_json TEXT,
@@ -43,6 +44,8 @@ def _init_sqlite(db_path: str = config.DATABASE_PATH) -> None:
         # Migrate existing table if columns missing
         cursor.execute("PRAGMA table_info(documents);")
         existing_cols = {row["name"] for row in cursor.fetchall()}
+        if "user_id" not in existing_cols:
+            cursor.execute("ALTER TABLE documents ADD COLUMN user_id TEXT;")
         if "image_url" not in existing_cols:
             cursor.execute("ALTER TABLE documents ADD COLUMN image_url TEXT;")
         if "watermarked_url" not in existing_cols:
@@ -110,6 +113,7 @@ def insert_document(
     created_at: str = "",
     image_url: Optional[str] = None,
     watermarked_url: Optional[str] = None,
+    user_id: Optional[str] = None,
     db_path: str = config.DATABASE_PATH,
 ) -> None:
     """Inserts a new document record into Supabase (if enabled) or SQLite."""
@@ -119,10 +123,10 @@ def insert_document(
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO documents (id, filename, status, extracted_json, reviewed_json, created_at, image_url, watermarked_url)
-                VALUES (?, ?, ?, ?, NULL, ?, ?, ?);
+                INSERT OR REPLACE INTO documents (id, user_id, filename, status, extracted_json, reviewed_json, created_at, image_url, watermarked_url)
+                VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?);
                 """,
-                (doc_id, filename, status, extracted_json, created_at, image_url, watermarked_url),
+                (doc_id, user_id, filename, status, extracted_json, created_at, image_url, watermarked_url),
             )
             conn.commit()
     except Exception as e:
@@ -134,6 +138,7 @@ def insert_document(
             payload = {
                 "id": doc_id,
                 "product_id": "cevondocs",
+                "user_id": user_id,
                 "filename": filename,
                 "status": status,
                 "extracted_json": extracted_json,
@@ -146,18 +151,25 @@ def insert_document(
             with httpx.Client(timeout=10.0) as client:
                 res = client.post(url, headers=_supabase_headers("return=minimal"), json=payload)
                 if res.status_code in (200, 201):
-                    logger.info(f"Inserted document '{doc_id}' into Supabase PostgREST table '{config.SUPABASE_DOCUMENTS_TABLE}'.")
+                    logger.info(f"Inserted document '{doc_id}' for user '{user_id}' into Supabase PostgREST table '{config.SUPABASE_DOCUMENTS_TABLE}'.")
                     return
                 logger.error(f"Supabase insert failed ({res.status_code}): {res.text}")
         except Exception as e:
             logger.error(f"Supabase insert exception for '{doc_id}': {e}")
 
 
-def get_document(doc_id: str, db_path: str = config.DATABASE_PATH) -> Optional[Dict[str, Any]]:
-    """Retrieves a single document by ID from Supabase or SQLite."""
+def get_document(
+    doc_id: str,
+    user_id: Optional[str] = None,
+    db_path: str = config.DATABASE_PATH,
+) -> Optional[Dict[str, Any]]:
+    """Retrieves a single document by ID, optionally scoped to user_id."""
     if config.ENABLE_SUPABASE:
         try:
-            url = _supabase_url(f"{config.SUPABASE_DOCUMENTS_TABLE}?id=eq.{doc_id}&select=*")
+            filter_query = f"id=eq.{doc_id}"
+            if user_id:
+                filter_query += f"&user_id=eq.{user_id}"
+            url = _supabase_url(f"{config.SUPABASE_DOCUMENTS_TABLE}?{filter_query}&select=*")
             with httpx.Client(timeout=10.0) as client:
                 res = client.get(url, headers=_supabase_headers())
                 if res.status_code == 200:
@@ -169,18 +181,27 @@ def get_document(doc_id: str, db_path: str = config.DATABASE_PATH) -> Optional[D
 
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
+        if user_id:
+            cursor.execute("SELECT * FROM documents WHERE id = ? AND (user_id = ? OR user_id IS NULL)", (doc_id, user_id))
+        else:
+            cursor.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
         row = cursor.fetchone()
         if row:
             return dict(row)
         return None
 
 
-def get_pending(db_path: str = config.DATABASE_PATH) -> List[Dict[str, Any]]:
-    """Retrieves all documents with status='pending_review'."""
+def get_pending(
+    user_id: Optional[str] = None,
+    db_path: str = config.DATABASE_PATH,
+) -> List[Dict[str, Any]]:
+    """Retrieves all documents with status='pending_review', optionally scoped to user_id."""
     if config.ENABLE_SUPABASE:
         try:
-            url = _supabase_url(f"{config.SUPABASE_DOCUMENTS_TABLE}?status=eq.pending_review&order=created_at.desc&select=*")
+            filter_query = "status=eq.pending_review"
+            if user_id:
+                filter_query += f"&user_id=eq.{user_id}"
+            url = _supabase_url(f"{config.SUPABASE_DOCUMENTS_TABLE}?{filter_query}&order=created_at.desc&select=*")
             with httpx.Client(timeout=10.0) as client:
                 res = client.get(url, headers=_supabase_headers())
                 if res.status_code == 200:
@@ -190,29 +211,48 @@ def get_pending(db_path: str = config.DATABASE_PATH) -> List[Dict[str, Any]]:
 
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM documents WHERE status = 'pending_review' ORDER BY created_at DESC"
-        )
+        if user_id:
+            cursor.execute(
+                "SELECT * FROM documents WHERE status = 'pending_review' AND (user_id = ? OR user_id IS NULL) ORDER BY created_at DESC",
+                (user_id,),
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM documents WHERE status = 'pending_review' ORDER BY created_at DESC"
+            )
         rows = cursor.fetchall()
         return [dict(r) for r in rows]
 
 
 def approve_document(
-    doc_id: str, reviewed_json: str, db_path: str = config.DATABASE_PATH
+    doc_id: str,
+    reviewed_json: str,
+    user_id: Optional[str] = None,
+    db_path: str = config.DATABASE_PATH,
 ) -> bool:
-    """Updates status to 'approved' and sets reviewed_json in Supabase and SQLite."""
+    """Updates status to 'approved' and sets reviewed_json in Supabase and SQLite, scoped to user_id."""
     sqlite_success = False
     try:
         with get_connection(db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                """
-                UPDATE documents
-                SET status = 'approved', reviewed_json = ?
-                WHERE id = ?;
-                """,
-                (reviewed_json, doc_id),
-            )
+            if user_id:
+                cursor.execute(
+                    """
+                    UPDATE documents
+                    SET status = 'approved', reviewed_json = ?
+                    WHERE id = ? AND (user_id = ? OR user_id IS NULL);
+                    """,
+                    (reviewed_json, doc_id, user_id),
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE documents
+                    SET status = 'approved', reviewed_json = ?
+                    WHERE id = ?;
+                    """,
+                    (reviewed_json, doc_id),
+                )
             conn.commit()
             sqlite_success = cursor.rowcount > 0
     except Exception as e:
@@ -220,7 +260,10 @@ def approve_document(
 
     if config.ENABLE_SUPABASE:
         try:
-            url = _supabase_url(f"{config.SUPABASE_DOCUMENTS_TABLE}?id=eq.{doc_id}")
+            filter_query = f"id=eq.{doc_id}"
+            if user_id:
+                filter_query += f"&user_id=eq.{user_id}"
+            url = _supabase_url(f"{config.SUPABASE_DOCUMENTS_TABLE}?{filter_query}")
             payload = {"status": "approved", "reviewed_json": reviewed_json}
             with httpx.Client(timeout=10.0) as client:
                 res = client.patch(url, headers=_supabase_headers("return=representation"), json=payload)
@@ -234,13 +277,18 @@ def approve_document(
     return sqlite_success
 
 
-def get_history(limit: int = 50, db_path: str = config.DATABASE_PATH) -> List[Dict[str, Any]]:
-    """Retrieves processed document history ordered by creation date descending."""
+def get_history(
+    user_id: Optional[str] = None,
+    limit: int = 50,
+    db_path: str = config.DATABASE_PATH,
+) -> List[Dict[str, Any]]:
+    """Retrieves processed document history ordered by creation date descending, scoped to user_id."""
     if config.ENABLE_SUPABASE:
         try:
-            url = _supabase_url(
-                f"{config.SUPABASE_DOCUMENTS_TABLE}?select=id,filename,status,created_at,extracted_json,image_url,watermarked_url&order=created_at.desc&limit={limit}"
-            )
+            filter_query = f"select=id,filename,status,created_at,extracted_json,image_url,watermarked_url&order=created_at.desc&limit={limit}"
+            if user_id:
+                filter_query = f"user_id=eq.{user_id}&{filter_query}"
+            url = _supabase_url(f"{config.SUPABASE_DOCUMENTS_TABLE}?{filter_query}")
             with httpx.Client(timeout=10.0) as client:
                 res = client.get(url, headers=_supabase_headers())
                 if res.status_code == 200:
@@ -250,15 +298,27 @@ def get_history(limit: int = 50, db_path: str = config.DATABASE_PATH) -> List[Di
 
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT id, filename, status, created_at, extracted_json, image_url, watermarked_url
-            FROM documents
-            ORDER BY created_at DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
+        if user_id:
+            cursor.execute(
+                """
+                SELECT id, filename, status, created_at, extracted_json, image_url, watermarked_url
+                FROM documents
+                WHERE user_id = ? OR user_id IS NULL
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT id, filename, status, created_at, extracted_json, image_url, watermarked_url
+                FROM documents
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
         return [dict(r) for r in cursor.fetchall()]
 
 

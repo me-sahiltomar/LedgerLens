@@ -137,3 +137,91 @@ def test_low_resolution_image_validation():
     img_meta = {"width": 300, "height": 400}  # Low resolution (< 500px)
     result = evaluate_validation(data, image_metadata=img_meta)
     assert any("Low resolution image" in w for w in result.warnings)
+
+
+def test_invoice_with_discount_passes_validation():
+    # User's Commercial Invoice scenario: 12,800 - 300 + 12 = 12,512
+    data = {
+        "vendor": "Globex Corp",
+        "invoice_number": "000562",
+        "date": "2026-07-20",
+        "currency": "USD",
+        "subtotal": 12800.0,
+        "discount": 300.0,
+        "tax": 12.0,
+        "total": 12512.0,
+        "line_items": [
+            {"description": "Industrial Pump", "quantity": 1.0, "unit_price": 12800.0, "amount": 12800.0, "confidence": 0.95}
+        ],
+        "overall_confidence": 0.95,
+    }
+    result = evaluate_validation(data)
+    assert len(result.failed_checks) == 0
+    assert any("Financial totals verified" in c for c in result.passed_checks)
+    assert any("Discount 300.00" in c for c in result.passed_checks)
+
+
+def test_invoice_with_shipping_and_tip_validation():
+    # Subtotal 100 - Discount 10 + Tax 8 + Shipping 15 + Tip 10 = Total 123
+    data = {
+        "vendor": "Catering Co",
+        "invoice_number": "INV-7788",
+        "date": "2026-07-20",
+        "currency": "USD",
+        "subtotal": 100.0,
+        "discount": 10.0,
+        "tax": 8.0,
+        "shipping": 15.0,
+        "tip": 10.0,
+        "total": 123.0,
+        "line_items": [
+            {"description": "Platter", "quantity": 2.0, "unit_price": 50.0, "amount": 100.0, "confidence": 0.95}
+        ],
+        "overall_confidence": 0.95,
+    }
+    result = evaluate_validation(data)
+    assert len(result.failed_checks) == 0
+    assert any("Financial totals verified" in c for c in result.passed_checks)
+
+
+def test_tax_inclusive_pricing_validation():
+    # VAT included: Subtotal 100 = Total 100, Tax 20 (UK/Europe)
+    data = {
+        "vendor": "London Bistro",
+        "invoice_number": "VAT-992",
+        "date": "2026-07-20",
+        "currency": "GBP",
+        "subtotal": 100.0,
+        "tax": 20.0,
+        "total": 100.0,
+        "line_items": [
+            {"description": "Dinner Menu", "quantity": 1.0, "unit_price": 100.0, "amount": 100.0, "confidence": 0.95}
+        ],
+        "overall_confidence": 0.95,
+    }
+    result = evaluate_validation(data)
+    assert len(result.failed_checks) == 0
+    assert any("tax-inclusive" in c for c in result.passed_checks)
+
+
+def test_negative_discount_line_item_permitted():
+    # Discount coupon line item with negative unit price and amount
+    data = {
+        "vendor": "Retail Express",
+        "invoice_number": "RET-441",
+        "date": "2026-07-20",
+        "currency": "USD",
+        "subtotal": 80.0,
+        "tax": 8.0,
+        "total": 88.0,
+        "line_items": [
+            {"description": "Sweater", "quantity": 1.0, "unit_price": 100.0, "amount": 100.0, "confidence": 0.95},
+            {"description": "Promo Voucher Discount", "quantity": 1.0, "unit_price": -20.0, "amount": -20.0, "confidence": 0.95},
+        ],
+        "overall_confidence": 0.95,
+    }
+    result = evaluate_validation(data)
+    # The negative line item must not trigger "Negative line item value rejected"
+    assert not any("Negative line item value rejected" in f for f in result.failed_checks)
+    assert len(result.failed_checks) == 0
+

@@ -175,3 +175,22 @@ def test_data_provenance_tracking():
     assert prov["line_items"][0]["description"] == "EXTRACTED"
     assert prov["line_items"][0]["unit_price"] == "NORMALIZED"
     assert prov["line_items"][0]["amount"] == "COMPUTED"
+
+
+def test_financial_aliases_normalization():
+    raw_json = {
+        "vendor": "Online Depot",
+        "subtotal": "100.00",
+        "coupon": "-15.00",
+        "delivery_fee": "8.50",
+        "gratuity": "5.00",
+        "tax": "7.50",
+        "total": "106.00",
+    }
+    normalized = normalize_invoice_json(raw_json)
+    assert normalized["discount"] == 15.0  # normalized from coupon & made positive
+    assert normalized["shipping"] == 8.50  # normalized from delivery_fee
+    assert normalized["tip"] == 5.00       # normalized from gratuity
+    assert normalized["subtotal"] == 100.0
+    assert normalized["total"] == 106.0
+

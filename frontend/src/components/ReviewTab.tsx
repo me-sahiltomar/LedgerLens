@@ -45,9 +45,16 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({
   const [date, setDate] = useState<string>('');
   const [currency, setCurrency] = useState<string>('USD');
   const [subtotal, setSubtotal] = useState<number>(0);
+  const [discount, setDiscount] = useState<number>(0);
+  const [shipping, setShipping] = useState<number>(0);
   const [tax, setTax] = useState<number>(0);
+  const [tip, setTip] = useState<number>(0);
   const [total, setTotal] = useState<number>(0);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
+
+  const calculateTotal = (s: number, d: number, tx: number, sh: number, tp: number) => {
+    return Math.round((s - d + tx + sh + tp) * 100) / 100;
+  };
 
   const loadQueue = async (preferredId?: string | null) => {
     setLoading(true);
@@ -85,7 +92,10 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({
     setDate(ext.date || '');
     setCurrency(ext.currency || 'USD');
     setSubtotal(Number(ext.subtotal) || 0);
+    setDiscount(Number(ext.discount) || 0);
+    setShipping(Number(ext.shipping) || 0);
     setTax(Number(ext.tax) || 0);
+    setTip(Number(ext.tip) || 0);
     setTotal(Number(ext.total) || 0);
     setLineItems(
       Array.isArray(ext.line_items)
@@ -114,8 +124,9 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({
     setLineItems(updated);
 
     const newSubtotal = updated.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-    setSubtotal(Math.round(newSubtotal * 100) / 100);
-    setTotal(Math.round((newSubtotal + tax) * 100) / 100);
+    const rounded = Math.round(newSubtotal * 100) / 100;
+    setSubtotal(rounded);
+    setTotal(calculateTotal(rounded, discount, tax, shipping, tip));
   };
 
   const handleAddLineItem = () => {
@@ -135,8 +146,9 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({
     const updated = lineItems.filter((_, i) => i !== index);
     setLineItems(updated);
     const newSubtotal = updated.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-    setSubtotal(Math.round(newSubtotal * 100) / 100);
-    setTotal(Math.round((newSubtotal + tax) * 100) / 100);
+    const rounded = Math.round(newSubtotal * 100) / 100;
+    setSubtotal(rounded);
+    setTotal(calculateTotal(rounded, discount, tax, shipping, tip));
   };
 
   const handleApprove = async () => {
@@ -151,7 +163,10 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({
       date,
       currency,
       subtotal: Number(subtotal),
+      discount: Number(discount),
+      shipping: Number(shipping),
       tax: Number(tax),
+      tip: Number(tip),
       total: Number(total),
       line_items: lineItems,
     };
@@ -171,7 +186,10 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({
   };
 
   const selectedDoc = documents.find((d) => d.document_id === selectedId);
-  const mathMatches = Math.abs(subtotal + tax - total) < 0.05;
+  const mathMatches =
+    Math.abs(subtotal - discount + tax + shipping + tip - total) < 0.05 ||
+    (tax > 0 && Math.abs(subtotal - discount + shipping + tip - total) < 0.05) ||
+    (discount > 0 && Math.abs(subtotal + tax + shipping + tip - total) < 0.05);
 
   return (
     <div className="space-y-6">
@@ -399,7 +417,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({
                 <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>
-                    <strong>Arithmetic Discrepancy:</strong> Subtotal ({subtotal.toFixed(2)}) + Tax ({tax.toFixed(2)}) &ne; Total ({total.toFixed(2)}). Recalibrate values below.
+                    <strong>Arithmetic Discrepancy:</strong> Subtotal ({subtotal.toFixed(2)}){discount > 0 ? ` - Discount (${discount.toFixed(2)})` : ''} + Tax ({tax.toFixed(2)}){shipping > 0 ? ` + Shipping (${shipping.toFixed(2)})` : ''}{tip > 0 ? ` + Tip (${tip.toFixed(2)})` : ''} &ne; Total ({total.toFixed(2)}). Recalibrate values below.
                   </span>
                 </div>
               )}
@@ -448,18 +466,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-zinc-400 text-[11px] font-medium mb-1">
-                        Currency
-                      </label>
-                      <input
-                        type="text"
-                        value={currency}
-                        onChange={(e) => setCurrency(e.target.value)}
-                        className="cevon-input w-full font-mono uppercase"
-                      />
-                    </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     <div>
                       <label className="block text-zinc-400 text-[11px] font-medium mb-1">
                         Subtotal
@@ -471,14 +478,31 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({
                         onChange={(e) => {
                           const val = parseFloat(e.target.value) || 0;
                           setSubtotal(val);
-                          setTotal(Math.round((val + tax) * 100) / 100);
+                          setTotal(calculateTotal(val, discount, tax, shipping, tip));
                         }}
                         className="cevon-input w-full font-mono tabular-nums"
                       />
                     </div>
                     <div>
                       <label className="block text-zinc-400 text-[11px] font-medium mb-1">
-                        Tax
+                        Discount / Rebate
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={discount}
+                        onChange={(e) => {
+                          const val = Math.abs(parseFloat(e.target.value) || 0);
+                          setDiscount(val);
+                          setTotal(calculateTotal(subtotal, val, tax, shipping, tip));
+                        }}
+                        className="cevon-input w-full font-mono tabular-nums text-emerald-400"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-zinc-400 text-[11px] font-medium mb-1">
+                        Tax / VAT
                       </label>
                       <input
                         type="number"
@@ -487,23 +511,73 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({
                         onChange={(e) => {
                           const val = parseFloat(e.target.value) || 0;
                           setTax(val);
-                          setTotal(Math.round((subtotal + val) * 100) / 100);
+                          setTotal(calculateTotal(subtotal, discount, val, shipping, tip));
                         }}
                         className="cevon-input w-full font-mono tabular-nums"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-zinc-400 text-[11px] font-medium mb-1">
+                        Shipping / Freight
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={shipping}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          setShipping(val);
+                          setTotal(calculateTotal(subtotal, discount, tax, val, tip));
+                        }}
+                        className="cevon-input w-full font-mono tabular-nums"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-zinc-400 text-[11px] font-medium mb-1">
+                        Tip / Gratuity
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={tip}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          setTip(val);
+                          setTotal(calculateTotal(subtotal, discount, tax, shipping, val));
+                        }}
+                        className="cevon-input w-full font-mono tabular-nums"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-zinc-400 text-[11px] font-medium mb-1">
+                        Currency
+                      </label>
+                      <input
+                        type="text"
+                        value={currency}
+                        onChange={(e) => setCurrency(e.target.value)}
+                        className="cevon-input w-full font-mono uppercase"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-zinc-400 text-[11px] font-medium mb-1">
-                      Total ({currency})
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-zinc-400 text-[11px] font-medium">
+                        Total ({currency})
+                      </label>
+                      <span className="font-mono text-[10px] text-zinc-500">
+                        Subtotal - Discount + Tax + Shipping + Tip
+                      </span>
+                    </div>
                     <input
                       type="number"
                       step="0.01"
                       value={total}
                       onChange={(e) => setTotal(parseFloat(e.target.value) || 0)}
-                      className="cevon-input w-full font-mono font-bold text-white tabular-nums text-sm border-zinc-700"
+                      className="cevon-input w-full font-mono font-bold text-white tabular-nums text-sm border-zinc-700 bg-zinc-950"
                     />
                   </div>
                 </div>

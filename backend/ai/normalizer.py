@@ -23,6 +23,9 @@ Each normalized field internally retains its origin in `_provenance`:
 - DEFAULTED : Missing in raw payload and set to default value.
 """
 
+import re
+from typing import Any
+
 CONFIDENCE_TIERS = {
     "EXPLICIT_EXTRACTED": 0.94,
     "STRONG_OCR": 0.88,
@@ -38,7 +41,10 @@ CONF_FIELDS = [
     "date_confidence",
     "currency_confidence",
     "subtotal_confidence",
+    "discount_confidence",
+    "shipping_confidence",
     "tax_confidence",
+    "tip_confidence",
     "total_confidence",
 ]
 
@@ -48,9 +54,27 @@ FIELD_DEFAULTS = {
     "date": ("", CONFIDENCE_TIERS["MISSING"]),
     "currency": ("", CONFIDENCE_TIERS["MISSING"]),
     "subtotal": (0.0, CONFIDENCE_TIERS["MISSING"]),
+    "discount": (0.0, 1.0),
+    "shipping": (0.0, 1.0),
     "tax": (0.0, CONFIDENCE_TIERS["MISSING"]),
+    "tip": (0.0, 1.0),
     "total": (0.0, CONFIDENCE_TIERS["MISSING"]),
 }
+
+
+def _clean_amount(val: Any, default: float = 0.0) -> float:
+    """Sanitizes monetary string or number into float."""
+    if val is None:
+        return default
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        cleaned = re.sub(r"[^\d.-]", "", val.replace("(", "-").replace(")", "").strip())
+        try:
+            return float(cleaned)
+        except ValueError:
+            return default
+    return default
 
 
 def track_field_provenance(raw_data: dict, normalized_data: dict) -> dict:
@@ -63,7 +87,10 @@ def track_field_provenance(raw_data: dict, normalized_data: dict) -> dict:
     """
     provenance = {}
 
-    top_fields = ["vendor", "invoice_number", "date", "currency", "subtotal", "tax", "total"]
+    top_fields = [
+        "vendor", "invoice_number", "date", "currency",
+        "subtotal", "discount", "shipping", "tax", "tip", "total"
+    ]
     for field in top_fields:
         if field in raw_data and raw_data[field] is not None and raw_data[field] != "":
             provenance[field] = "EXTRACTED"
@@ -216,8 +243,16 @@ def compute_overall_confidence(data: dict) -> float:
     critical_scores = []
 
     critical_fields = ["vendor", "invoice_number", "date", "subtotal", "total"]
+    optional_fields = {"discount", "shipping", "tip"}
+
     for field_name in CONF_FIELDS:
         base_name = field_name.replace("_confidence", "")
+        # For optional fields, only include in overall score if the field is present and non-zero
+        if base_name in optional_fields:
+            opt_val = data.get(base_name)
+            if opt_val is None or _clean_amount(opt_val) == 0.0:
+                continue
+
         val = data.get(field_name)
         if isinstance(val, (int, float)):
             score = float(val)
@@ -251,12 +286,48 @@ def normalize_invoice_json(data: dict) -> dict:
     if not isinstance(data, dict):
         raise ValueError("Provider output is not a valid JSON dictionary.")
 
-    known_keys = {"vendor", "invoice_number", "date", "currency", "subtotal", "tax", "total", "line_items", "price"}
+    known_keys = {
+        "vendor", "invoice_number", "date", "currency", "subtotal",
+        "discount", "shipping", "tax", "tip", "total", "line_items", "price"
+    }
     if not any(k in data for k in known_keys):
         # Return un-normalized if no recognizable invoice fields exist so Pydantic handles validation failure
         return data
 
     normalized = dict(data)
+
+    # 0. Map financial key aliases
+    if normalized.get("discount") is None:
+        for alias in ["discount_amount", "discounts", "rebate", "rebates", "coupon", "coupons", "promo", "voucher"]:
+            if normalized.get(alias) is not None:
+                normalized["discount"] = normalized[alias]
+                if f"{alias}_confidence" in normalized and "discount_confidence" not in normalized:
+                    normalized["discount_confidence"] = normalized[f"{alias}_confidence"]
+                break
+
+    if normalized.get("shipping") is None:
+        for alias in ["shipping_amount", "shipping_fee", "freight", "delivery", "delivery_fee", "postage", "handling"]:
+            if normalized.get(alias) is not None:
+                normalized["shipping"] = normalized[alias]
+                if f"{alias}_confidence" in normalized and "shipping_confidence" not in normalized:
+                    normalized["shipping_confidence"] = normalized[f"{alias}_confidence"]
+                break
+
+    if normalized.get("tip") is None:
+        for alias in ["tips", "gratuity", "gratuities", "service_charge"]:
+            if normalized.get(alias) is not None:
+                normalized["tip"] = normalized[alias]
+                if f"{alias}_confidence" in normalized and "tip_confidence" not in normalized:
+                    normalized["tip_confidence"] = normalized[f"{alias}_confidence"]
+                break
+
+    # Sanitize numeric financial fields
+    for num_f in ["subtotal", "tax", "total", "shipping", "tip"]:
+        if num_f in normalized and normalized[num_f] is not None:
+            normalized[num_f] = _clean_amount(normalized[num_f])
+
+    if "discount" in normalized and normalized["discount"] is not None:
+        normalized["discount"] = abs(_clean_amount(normalized["discount"]))
 
     # 1. Preserve missing required top-level fields without fabricating business placeholders
     for field_name, (fallback_value, fallback_conf) in FIELD_DEFAULTS.items():

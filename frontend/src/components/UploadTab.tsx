@@ -137,9 +137,20 @@ export const UploadTab: React.FC<UploadTabProps> = ({
 
   // Math consistency check
   const subtotal = Number(extracted?.subtotal) || 0;
+  const discount = Number(extracted?.discount) || 0;
+  const shipping = Number(extracted?.shipping) || 0;
   const tax = Number(extracted?.tax) || 0;
+  const tip = Number(extracted?.tip) || 0;
   const total = Number(extracted?.total) || 0;
-  const mathMatches = Math.abs(subtotal + tax - total) < 0.05;
+
+  // Real-world math consistency check:
+  // 1. Standard: Subtotal - Discount + Tax + Shipping + Tip = Total
+  // 2. Tax-inclusive: Subtotal - Discount + Shipping + Tip = Total
+  // 3. Post-discount: Subtotal + Tax + Shipping + Tip = Total
+  const mathMatches =
+    Math.abs(subtotal - discount + tax + shipping + tip - total) < 0.05 ||
+    (tax > 0 && Math.abs(subtotal - discount + shipping + tip - total) < 0.05) ||
+    (discount > 0 && Math.abs(subtotal + tax + shipping + tip - total) < 0.05);
 
   return (
     <div className="space-y-6">
@@ -321,7 +332,7 @@ export const UploadTab: React.FC<UploadTabProps> = ({
                       <div className="flex items-start gap-2.5">
                         <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
                         <div>
-                          <span className="font-semibold text-amber-200">Mathematical Inconsistency:</span> Subtotal ({subtotal.toFixed(2)}) + Tax ({tax.toFixed(2)}) does not equal Total ({total.toFixed(2)}). Document flagged for human verification.
+                          <span className="font-semibold text-amber-200">Mathematical Inconsistency:</span> Subtotal ({subtotal.toFixed(2)}){discount > 0 ? ` - Discount (${discount.toFixed(2)})` : ''} + Tax ({tax.toFixed(2)}){shipping > 0 ? ` + Shipping (${shipping.toFixed(2)})` : ''}{tip > 0 ? ` + Tip (${tip.toFixed(2)})` : ''} does not equal Total ({total.toFixed(2)}). Document flagged for human verification.
                         </div>
                       </div>
                       {onNavigateToReview && (
@@ -392,11 +403,20 @@ export const UploadTab: React.FC<UploadTabProps> = ({
                   </div>
                 </div>
 
-                {/* Subtotal & Tax Breakdown */}
-                <div className="flex items-center justify-between text-xs text-zinc-400 pt-3 border-t border-zinc-800/80 mt-3 font-mono">
+                {/* Subtotal, Discount, Shipping, Tip, and Tax Breakdown */}
+                <div className="flex flex-wrap items-center justify-between gap-y-1.5 text-xs text-zinc-400 pt-3 border-t border-zinc-800/80 mt-3 font-mono">
                   <span>Subtotal: <strong className="text-zinc-200">{subtotal.toFixed(2)}</strong></span>
+                  {discount > 0 && (
+                    <span className="text-emerald-400">Discount: <strong>-{discount.toFixed(2)}</strong></span>
+                  )}
                   <span>Tax: <strong className="text-zinc-200">{tax.toFixed(2)}</strong></span>
-                  <span>Calculated Total: <strong className="text-zinc-100">{(subtotal + tax).toFixed(2)}</strong></span>
+                  {shipping > 0 && (
+                    <span>Shipping: <strong className="text-zinc-200">{shipping.toFixed(2)}</strong></span>
+                  )}
+                  {tip > 0 && (
+                    <span>Tip: <strong className="text-zinc-200">{tip.toFixed(2)}</strong></span>
+                  )}
+                  <span>Calculated: <strong className="text-zinc-100">{(subtotal - discount + tax + shipping + tip).toFixed(2)}</strong></span>
                 </div>
               </div>
 

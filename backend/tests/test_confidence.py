@@ -235,3 +235,61 @@ def test_validation_failed_checks_route_to_pending_review():
     assert status == "pending_review"
     assert "arithmetic_mismatch" in flagged
 
+
+def test_discount_arithmetic_passes_auto_approve():
+    # Commercial Invoice: 12,800 - 300 + 12 = 12,512 with discount field populated
+    data = {
+        "vendor": "Globex Corporation",
+        "vendor_confidence": 0.99,
+        "invoice_number": "000562",
+        "invoice_number_confidence": 0.99,
+        "date": "11/05/2020",
+        "date_confidence": 0.99,
+        "currency": "USD",
+        "currency_confidence": 1.0,
+        "subtotal": 12800.0,
+        "subtotal_confidence": 0.99,
+        "discount": 300.0,
+        "discount_confidence": 0.95,
+        "tax": 12.0,
+        "tax_confidence": 0.99,
+        "total": 12512.0,
+        "total_confidence": 0.99,
+        "line_items": [{"description": "Item", "amount": 12800.0, "confidence": 0.99}],
+        "overall_confidence": 0.95,
+    }
+    status, flagged = route_document(data, threshold=0.75)
+    assert status == "auto_approved"
+    assert "arithmetic_mismatch" not in flagged
+    assert len(flagged) == 0
+
+
+def test_shipping_and_tip_passes_auto_approve():
+    # Subtotal 50 - Discount 5 + Tax 4 + Shipping 10 + Tip 8 = Total 67
+    data = {
+        "vendor": "Bistro Express",
+        "vendor_confidence": 0.95,
+        "invoice_number": "BX-102",
+        "invoice_number_confidence": 0.95,
+        "date": "2026-07-22",
+        "date_confidence": 0.95,
+        "currency": "USD",
+        "currency_confidence": 0.95,
+        "subtotal": 50.0,
+        "subtotal_confidence": 0.95,
+        "discount": 5.0,
+        "shipping": 10.0,
+        "tax": 4.0,
+        "tax_confidence": 0.95,
+        "tip": 8.0,
+        "total": 67.0,
+        "total_confidence": 0.95,
+        "line_items": [{"description": "Meal", "amount": 50.0, "confidence": 0.95}],
+        "overall_confidence": 0.95,
+    }
+    status, flagged = route_document(data, threshold=0.75)
+    assert status == "auto_approved"
+    assert "arithmetic_mismatch" not in flagged
+    assert len(flagged) == 0
+
+

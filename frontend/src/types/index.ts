@@ -29,8 +29,14 @@ export interface ExtractedData {
   currency_confidence: number;
   subtotal: number;
   subtotal_confidence: number;
+  discount?: number;
+  discount_confidence?: number;
+  shipping?: number;
+  shipping_confidence?: number;
   tax: number;
   tax_confidence: number;
+  tip?: number;
+  tip_confidence?: number;
   total: number;
   total_confidence: number;
   overall_confidence: number;

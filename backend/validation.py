@@ -88,24 +88,55 @@ def evaluate_validation(
     base_ai_confidence = float(data.get("overall_confidence", 0.80) or 0.80)
 
     # ----------------------------------------------------
-    # 1. Financial Consistency: Subtotal + Tax ≈ Total (±0.01)
+    # 1. Financial Consistency: Subtotal - Discount + Tax + Shipping + Tip ≈ Total (±0.05)
     # ----------------------------------------------------
     subtotal = float(data.get("subtotal") or 0.0)
+    discount = abs(float(data.get("discount") or 0.0))
+    shipping = float(data.get("shipping") or 0.0)
     tax = float(data.get("tax") or 0.0)
+    tip = float(data.get("tip") or 0.0)
     total = float(data.get("total") or 0.0)
 
     if total > 0 or subtotal > 0:
-        expected_total = subtotal + tax
-        if abs(expected_total - total) <= 0.01:
-            passed.append("Financial totals verified (Subtotal + Tax = Total)")
+        # Standard financial calculation
+        expected_total = subtotal - discount + tax + shipping + tip
+        diff_standard = abs(expected_total - total)
+
+        # Tax-inclusive / VAT included pricing (where Subtotal already includes tax)
+        expected_tax_inclusive = subtotal - discount + shipping + tip
+        diff_tax_inclusive = abs(expected_tax_inclusive - total)
+
+        # Post-discount subtotal (where Subtotal printed is already net of discount)
+        expected_post_discount = subtotal + tax + shipping + tip
+        diff_post_discount = abs(expected_post_discount - total)
+
+        if diff_standard <= 0.05:
+            if discount > 0 or shipping > 0 or tip > 0:
+                parts = [f"Subtotal {subtotal:.2f}"]
+                if discount > 0:
+                    parts.append(f"- Discount {discount:.2f}")
+                if tax > 0:
+                    parts.append(f"+ Tax {tax:.2f}")
+                if shipping > 0:
+                    parts.append(f"+ Shipping {shipping:.2f}")
+                if tip > 0:
+                    parts.append(f"+ Tip {tip:.2f}")
+                formula_str = " ".join(parts)
+                passed.append(f"Financial totals verified ({formula_str} = Total {total:.2f})")
+            else:
+                passed.append("Financial totals verified (Subtotal + Tax = Total)")
+        elif tax > 0 and diff_tax_inclusive <= 0.05:
+            passed.append(f"Financial totals verified with tax-inclusive pricing (Subtotal {subtotal:.2f} = Total {total:.2f}, Tax/VAT {tax:.2f} included)")
+        elif discount > 0 and diff_post_discount <= 0.05:
+            passed.append(f"Financial totals verified with post-discount subtotal (Subtotal {subtotal:.2f} + Tax {tax:.2f} = Total {total:.2f})")
         else:
             penalties += 0.15
-            failed.append(f"Subtotal + Tax ({subtotal:.2f} + {tax:.2f} = {expected_total:.2f}) does not equal Total ({total:.2f})")
+            failed.append(f"Subtotal + Tax ({subtotal:.2f} + {tax:.2f} - discount {discount:.2f} + shipping {shipping:.2f} + tip {tip:.2f} = {expected_total:.2f}) does not equal Total ({total:.2f})")
     else:
         warnings.append("Financial totals missing or zero; skipped total verification")
 
     # ----------------------------------------------------
-    # 2. Line Item Consistency: sum(line_item.amount) ≈ subtotal (±0.01)
+    # 2. Line Item Consistency: sum(line_item.amount) ≈ subtotal (±0.05)
     # ----------------------------------------------------
     line_items = data.get("line_items", [])
     if isinstance(line_items, list) and len(line_items) > 0:
@@ -115,8 +146,12 @@ def evaluate_validation(
                 line_sum += float(item.get("amount") or 0.0)
 
         if subtotal > 0:
-            if abs(line_sum - subtotal) <= 0.01:
+            diff_standard = abs(line_sum - subtotal)
+            diff_net = abs((line_sum - discount) - subtotal)
+            if diff_standard <= 0.05:
                 passed.append("Line item amounts sum matches subtotal")
+            elif discount > 0 and diff_net <= 0.05:
+                passed.append(f"Line item amounts sum matches gross subtotal (Items {line_sum:.2f} - Discount {discount:.2f} = Subtotal {subtotal:.2f})")
             else:
                 penalties += 0.10
                 failed.append(f"Line item amounts sum ({line_sum:.2f}) does not match subtotal ({subtotal:.2f})")
@@ -159,7 +194,7 @@ def evaluate_validation(
     # ----------------------------------------------------
     # 4. Numeric Validation: Reject Negative Values (-0.10 penalty each)
     # ----------------------------------------------------
-    numeric_checks = [("subtotal", subtotal), ("tax", tax), ("total", total)]
+    numeric_checks = [("subtotal", subtotal), ("tax", tax), ("total", total), ("shipping", shipping), ("tip", tip)]
     for num_name, num_val in numeric_checks:
         if num_val < 0.0:
             penalties += 0.10
@@ -168,9 +203,16 @@ def evaluate_validation(
     if isinstance(line_items, list):
         for idx, item in enumerate(line_items):
             if isinstance(item, dict):
+                desc = str(item.get("description", "")).lower()
+                is_discount_or_refund = any(
+                    term in desc
+                    for term in ["discount", "coupon", "promo", "voucher", "rebate", "credit", "saving", "refund", "allowance"]
+                )
                 for item_field in ["quantity", "unit_price", "amount"]:
                     i_val = float(item.get(item_field) or 0.0)
                     if i_val < 0.0:
+                        if is_discount_or_refund and item_field in ["unit_price", "amount"]:
+                            continue
                         penalties += 0.10
                         failed.append(f"Negative line item value rejected: item[{idx}].{item_field} ({i_val})")
 

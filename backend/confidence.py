@@ -46,6 +46,19 @@ def route_document(
         if conf_val < threshold:
             flagged_fields.append(field_name)
 
+    # Optional fields (discount, shipping, tip): only flag if extracted, non-zero, and explicit confidence is low
+    optional_conf_map = {
+        "discount_confidence": "discount",
+        "shipping_confidence": "shipping",
+        "tip_confidence": "tip",
+    }
+    for conf_key, field_name in optional_conf_map.items():
+        val = data.get(field_name)
+        if val is not None and float(val or 0.0) > 0.0:
+            c_val = data.get(conf_key)
+            if c_val is not None and float(c_val) < threshold:
+                flagged_fields.append(field_name)
+
     # 2. Check line items confidence
     line_items = data.get("line_items", [])
     for idx, item in enumerate(line_items):
@@ -58,22 +71,41 @@ def route_document(
         if item_conf < threshold:
             flagged_fields.append(f"line_items[{idx}]")
 
-    # 3. Arithmetic consistency check (Subtotal + Tax ≈ Total)
+    # 3. Arithmetic consistency check (Subtotal - Discount + Tax + Shipping + Tip ≈ Total)
     is_math_inconsistent = False
     subtotal = data.get("subtotal")
+    discount = data.get("discount")
+    shipping = data.get("shipping")
     tax = data.get("tax")
+    tip = data.get("tip")
     total = data.get("total")
+
     if subtotal is not None and total is not None:
         try:
             st_val = float(subtotal or 0.0)
+            disc_val = abs(float(discount or 0.0))
+            ship_val = float(shipping or 0.0)
             tax_val = float(tax or 0.0)
+            tip_val = float(tip or 0.0)
             tot_val = float(total or 0.0)
-            if (tot_val > 0 or st_val > 0) and abs((st_val + tax_val) - tot_val) > 0.05:
-                is_math_inconsistent = True
-                if "arithmetic_mismatch" not in flagged_fields:
-                    flagged_fields.append("arithmetic_mismatch")
-                if "total" not in flagged_fields:
-                    flagged_fields.append("total")
+
+            if tot_val > 0 or st_val > 0:
+                diff_standard = abs((st_val - disc_val + tax_val + ship_val + tip_val) - tot_val)
+                diff_tax_inclusive = abs((st_val - disc_val + ship_val + tip_val) - tot_val)
+                diff_post_discount = abs((st_val + tax_val + ship_val + tip_val) - tot_val)
+
+                matches_math = (
+                    diff_standard <= 0.05
+                    or (tax_val > 0 and diff_tax_inclusive <= 0.05)
+                    or (disc_val > 0 and diff_post_discount <= 0.05)
+                )
+
+                if not matches_math:
+                    is_math_inconsistent = True
+                    if "arithmetic_mismatch" not in flagged_fields:
+                        flagged_fields.append("arithmetic_mismatch")
+                    if "total" not in flagged_fields:
+                        flagged_fields.append("total")
         except (ValueError, TypeError):
             pass
 

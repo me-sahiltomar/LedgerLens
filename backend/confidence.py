@@ -58,11 +58,63 @@ def route_document(
         if item_conf < threshold:
             flagged_fields.append(f"line_items[{idx}]")
 
-    # 3. Determine status
+    # 3. Arithmetic consistency check (Subtotal + Tax ≈ Total)
+    is_math_inconsistent = False
+    subtotal = data.get("subtotal")
+    tax = data.get("tax")
+    total = data.get("total")
+    if subtotal is not None and total is not None:
+        try:
+            st_val = float(subtotal or 0.0)
+            tax_val = float(tax or 0.0)
+            tot_val = float(total or 0.0)
+            if (tot_val > 0 or st_val > 0) and abs((st_val + tax_val) - tot_val) > 0.05:
+                is_math_inconsistent = True
+                if "arithmetic_mismatch" not in flagged_fields:
+                    flagged_fields.append("arithmetic_mismatch")
+                if "total" not in flagged_fields:
+                    flagged_fields.append("total")
+        except (ValueError, TypeError):
+            pass
+
+    # 4. Check validation engine results if available
+    is_val_failed = False
+    val_meta = data.get("_validation")
+    if isinstance(val_meta, dict):
+        failed_checks = val_meta.get("failed_checks") or []
+        if failed_checks:
+            is_val_failed = True
+            for check in failed_checks:
+                c_str = str(check).lower()
+                if "subtotal + tax" in c_str or "does not equal total" in c_str:
+                    if "arithmetic_mismatch" not in flagged_fields:
+                        flagged_fields.append("arithmetic_mismatch")
+                elif "line item" in c_str:
+                    if "line_items_mismatch" not in flagged_fields:
+                        flagged_fields.append("line_items_mismatch")
+                elif "missing required field" in c_str:
+                    for f_key in ["vendor", "invoice_number", "date", "currency", "total", "subtotal"]:
+                        if f_key in c_str and f_key not in flagged_fields:
+                            flagged_fields.append(f_key)
+                elif "negative" in c_str:
+                    if "negative_value" not in flagged_fields:
+                        flagged_fields.append("negative_value")
+                else:
+                    if "validation_failed" not in flagged_fields:
+                        flagged_fields.append("validation_failed")
+
+    # 5. Check overall confidence
     if is_overall_low and "overall_confidence" not in flagged_fields:
         flagged_fields.append("overall_confidence")
 
-    if flagged_fields or is_overall_low:
+    # Deduplicate flagged_fields while preserving order
+    deduped_flagged: List[str] = []
+    for f in flagged_fields:
+        if f not in deduped_flagged:
+            deduped_flagged.append(f)
+    flagged_fields = deduped_flagged
+
+    if flagged_fields or is_overall_low or is_math_inconsistent or is_val_failed:
         status = "pending_review"
     else:
         status = "auto_approved"

@@ -182,3 +182,56 @@ def test_overall_confidence_low_flagged():
     status, flagged = route_document(data, threshold=0.75)
     assert status == "pending_review"
     assert "overall_confidence" in flagged
+
+
+def test_arithmetic_mismatch_routes_to_pending_review():
+    # High confidence on all fields, but Subtotal (12800) + Tax (12) != Total (12512)
+    data = {
+        "vendor": "Globex Corporation",
+        "vendor_confidence": 0.99,
+        "invoice_number": "000562",
+        "invoice_number_confidence": 0.99,
+        "date": "11/05/2020",
+        "date_confidence": 0.99,
+        "currency": "USD",
+        "currency_confidence": 1.0,
+        "subtotal": 12800.0,
+        "subtotal_confidence": 0.99,
+        "tax": 12.0,
+        "tax_confidence": 0.99,
+        "total": 12512.0,  # 12800 + 12 != 12512!
+        "total_confidence": 0.99,
+        "line_items": [{"description": "Item", "amount": 12800.0, "confidence": 0.99}],
+        "overall_confidence": 0.82,  # Even though 0.82 > 0.75 threshold
+    }
+    status, flagged = route_document(data, threshold=0.75)
+    assert status == "pending_review"
+    assert "arithmetic_mismatch" in flagged
+    assert "total" in flagged
+
+
+def test_validation_failed_checks_route_to_pending_review():
+    data = {
+        "vendor": "Test Corp",
+        "vendor_confidence": 0.95,
+        "invoice_number": "INV-1",
+        "invoice_number_confidence": 0.95,
+        "date": "2026-07-22",
+        "date_confidence": 0.95,
+        "currency": "USD",
+        "currency_confidence": 0.95,
+        "subtotal": 100.0,
+        "subtotal_confidence": 0.95,
+        "tax": 10.0,
+        "tax_confidence": 0.95,
+        "total": 110.0,
+        "total_confidence": 0.95,
+        "overall_confidence": 0.90,
+        "_validation": {
+            "failed_checks": ["Subtotal + Tax (100.00 + 10.00) does not equal Total (115.00)"]
+        }
+    }
+    status, flagged = route_document(data, threshold=0.75)
+    assert status == "pending_review"
+    assert "arithmetic_mismatch" in flagged
+

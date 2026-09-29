@@ -15,11 +15,12 @@ import {
   ShieldAlert,
   ArrowRight,
   Code,
+  AlertCircle,
 } from 'lucide-react';
 
 interface UploadTabProps {
   onExtractionSuccess?: () => void;
-  onNavigateToReview?: () => void;
+  onNavigateToReview?: (docId?: string) => void;
 }
 
 export const UploadTab: React.FC<UploadTabProps> = ({
@@ -314,13 +315,23 @@ export const UploadTab: React.FC<UploadTabProps> = ({
                 </div>
 
                 {/* Validation Warnings */}
-                <div className="mt-4 space-y-2">
+                <div className="mt-4 space-y-2.5">
                   {!mathMatches && subtotal > 0 && total > 0 && (
-                    <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                      <div>
-                        <span className="font-semibold">Mathematical Inconsistency:</span> Subtotal ({subtotal.toFixed(2)}) + Tax ({tax.toFixed(2)}) does not equal Total ({total.toFixed(2)}). Document has been flagged for human verification.
+                    <div className="p-3.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start gap-2.5">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+                        <div>
+                          <span className="font-semibold text-amber-200">Mathematical Inconsistency:</span> Subtotal ({subtotal.toFixed(2)}) + Tax ({tax.toFixed(2)}) does not equal Total ({total.toFixed(2)}). Document flagged for human verification.
+                        </div>
                       </div>
+                      {onNavigateToReview && (
+                        <button
+                          onClick={() => onNavigateToReview(result.document_id)}
+                          className="px-3 py-1.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-semibold shrink-0 transition-colors inline-flex items-center gap-1 self-start sm:self-auto cursor-pointer"
+                        >
+                          <span>Recalibrate in Review Queue</span> &rarr;
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -333,15 +344,18 @@ export const UploadTab: React.FC<UploadTabProps> = ({
                     </div>
                   )}
 
-                  {((result.overall_confidence ?? result.extracted_data?.overall_confidence ?? 1) < 0.75) && (
+                  {(result.status === 'pending_review' && mathMatches) && (
                     <div className="p-3 rounded-md bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 flex items-center justify-between">
-                      <span className="text-zinc-400">
-                        Confidence score below threshold (0.75). Auto-routed to Human Review Queue.
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span className="text-zinc-300">
+                          Document flagged for manual verification. Auto-routed to Human Review Queue.
+                        </span>
+                      </div>
                       {onNavigateToReview && (
                         <button
-                          onClick={onNavigateToReview}
-                          className="font-semibold text-zinc-200 hover:text-white underline inline-flex items-center gap-1 ml-2"
+                          onClick={() => onNavigateToReview(result.document_id)}
+                          className="font-semibold text-zinc-200 hover:text-white underline inline-flex items-center gap-1 ml-2 cursor-pointer"
                         >
                           Review Now &rarr;
                         </button>

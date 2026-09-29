@@ -12,6 +12,7 @@ import { AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<string>('upload');
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [connecting, setConnecting] = useState<boolean>(true);
@@ -81,19 +82,30 @@ export default function Home() {
         </div>
       )}
 
-      {/* Main Workspace Canvas */}
+      {/* Main Workspace Canvas: Keep views mounted to preserve upload & review state */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {activeTab === 'upload' && (
+        <div className={activeTab === 'upload' ? 'block' : 'hidden'}>
           <UploadTab
             onExtractionSuccess={refreshAppState}
-            onNavigateToReview={() => setActiveTab('review')}
+            onNavigateToReview={(docId?: string) => {
+              if (docId) setSelectedDocId(docId);
+              setActiveTab('review');
+            }}
           />
-        )}
-        {activeTab === 'review' && (
-          <ReviewTab onApprovalSuccess={refreshAppState} />
-        )}
-        {activeTab === 'history' && <HistoryTab />}
-        {activeTab === 'settings' && <SettingsTab health={health} />}
+        </div>
+        <div className={activeTab === 'review' ? 'block' : 'hidden'}>
+          <ReviewTab
+            onApprovalSuccess={refreshAppState}
+            targetDocId={selectedDocId}
+            isActive={activeTab === 'review'}
+          />
+        </div>
+        <div className={activeTab === 'history' ? 'block' : 'hidden'}>
+          <HistoryTab isActive={activeTab === 'history'} />
+        </div>
+        <div className={activeTab === 'settings' ? 'block' : 'hidden'}>
+          <SettingsTab health={health} />
+        </div>
       </main>
 
       {/* Universal CevonX Product Footer */}

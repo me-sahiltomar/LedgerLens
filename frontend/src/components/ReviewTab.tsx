@@ -22,9 +22,15 @@ import {
 
 interface ReviewTabProps {
   onApprovalSuccess?: () => void;
+  targetDocId?: string | null;
+  isActive?: boolean;
 }
 
-export const ReviewTab: React.FC<ReviewTabProps> = ({ onApprovalSuccess }) => {
+export const ReviewTab: React.FC<ReviewTabProps> = ({
+  onApprovalSuccess,
+  targetDocId,
+  isActive,
+}) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [documents, setDocuments] = useState<ReviewItem[]>([]);
@@ -43,16 +49,17 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onApprovalSuccess }) => {
   const [total, setTotal] = useState<number>(0);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
 
-  const loadQueue = async () => {
+  const loadQueue = async (preferredId?: string | null) => {
     setLoading(true);
     setMessage(null);
     try {
       const res = await fetchReviewQueue();
-      setDocuments(res.documents || []);
-      if (res.documents && res.documents.length > 0) {
-        if (!selectedId || !res.documents.find((d) => d.document_id === selectedId)) {
-          selectDocument(res.documents[0]);
-        }
+      const docs = res.documents || [];
+      setDocuments(docs);
+      if (docs.length > 0) {
+        const idToSelect = preferredId || targetDocId || selectedId;
+        const target = docs.find((d) => d.document_id === idToSelect);
+        selectDocument(target || docs[0]);
       } else {
         setSelectedId(null);
       }
@@ -64,8 +71,10 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onApprovalSuccess }) => {
   };
 
   useEffect(() => {
-    loadQueue();
-  }, []);
+    if (isActive !== false) {
+      loadQueue(targetDocId);
+    }
+  }, [isActive, targetDocId]);
 
   const selectDocument = (doc: ReviewItem) => {
     setSelectedId(doc.document_id);
@@ -181,7 +190,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onApprovalSuccess }) => {
         </div>
 
         <button
-          onClick={loadQueue}
+          onClick={() => loadQueue()}
           disabled={loading}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300 transition-colors self-start sm:self-auto"
         >

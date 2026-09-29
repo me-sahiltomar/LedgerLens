@@ -251,8 +251,8 @@ def ingest(file: UploadFile = File(...)):
 
         extracted_data_dict = extracted_schema.model_dump()
 
-        # 5. Confidence Routing
-        status, flagged_fields = confidence.route_document(extracted_schema, config.REVIEW_THRESHOLD)
+        # 5. Confidence & Arithmetic Validation Routing
+        status, flagged_fields = confidence.route_document(extracted_data_dict, config.REVIEW_THRESHOLD)
         
         # If moderation provider was unavailable, force route to manual review
         if mod_unavailable or mod_status == "UNAVAILABLE":

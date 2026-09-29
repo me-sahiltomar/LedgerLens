@@ -17,7 +17,11 @@ import {
   Download,
 } from 'lucide-react';
 
-export const HistoryTab: React.FC = () => {
+interface HistoryTabProps {
+  isActive?: boolean;
+}
+
+export const HistoryTab: React.FC<HistoryTabProps> = ({ isActive }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [documents, setDocuments] = useState<HistoryItem[]>([]);
   const [search, setSearch] = useState<string>('');
@@ -37,8 +41,10 @@ export const HistoryTab: React.FC = () => {
   };
 
   useEffect(() => {
-    loadHistory();
-  }, []);
+    if (isActive !== false) {
+      loadHistory();
+    }
+  }, [isActive]);
 
   const filtered = documents.filter((doc) => {
     const matchesSearch =

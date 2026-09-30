@@ -2,12 +2,13 @@
  * LedgerLens (A CevonX Product) — Authentication Configuration
  * 
  * Connects to central CevonX Products Supabase project (gzhiltwyuhclzbhaypzd).
- * Dedicated OAuth callback: https://ledgerlens.cevonx.com/auth/callback
+ * Dedicated destination: https://ledgerlens.cevonx.com
  */
 
 export const PRODUCT_ID = 'cevondocs';
 export const PRODUCT_NAME = 'LedgerLens';
 export const DEFAULT_SUPABASE_URL = 'https://gzhiltwyuhclzbhaypzd.supabase.co';
+export const DEFAULT_APP_BASE_URL = 'https://ledgerlens.cevonx.com';
 
 /**
  * Returns whether Supabase authentication is properly configured in current environment.
@@ -28,26 +29,53 @@ export function isSupabaseAuthConfigured(): boolean {
 }
 
 /**
- * Returns the product-specific OAuth callback URL for LedgerLens.
- * 
+ * Resolves the application base URL for LedgerLens.
+ * Priority:
+ * 1. Client window.location.origin (if in browser)
+ * 2. Explicit origin parameter (if valid http/https URL)
+ * 3. Environment variables (NEXT_PUBLIC_APP_URL or NEXT_PUBLIC_SITE_URL, strictly rejecting foreign domains like products.cevonx.com)
+ * 4. Production canonical default: https://ledgerlens.cevonx.com
+ */
+export function getAppBaseUrl(origin?: string): string {
+  // If running in browser, prioritize current window origin so we always match the host
+  if (typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http')) {
+    return window.location.origin.replace(/\/$/, '');
+  }
+
+  // If origin explicitly passed
+  if (origin && typeof origin === 'string' && origin.startsWith('http')) {
+    return origin.replace(/\/$/, '');
+  }
+
+  // Environment variable override (safeguard: ignore if pointing to another CevonX product)
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL;
+  if (envUrl && envUrl.startsWith('http') && !envUrl.includes('products.cevonx.com')) {
+    return envUrl.replace(/\/$/, '');
+  }
+
+  return DEFAULT_APP_BASE_URL;
+}
+
+/**
+ * Returns the product-specific OAuth and email verification callback URL for LedgerLens.
  * Production destination: https://ledgerlens.cevonx.com/auth/callback
- * Development destination: http://localhost:3000/auth/callback (or current window.location.origin)
  */
 export function getProductCallbackUrl(origin?: string): string {
-  if (process.env.NEXT_PUBLIC_PRODUCT_CALLBACK_URL) {
+  if (
+    process.env.NEXT_PUBLIC_PRODUCT_CALLBACK_URL &&
+    !process.env.NEXT_PUBLIC_PRODUCT_CALLBACK_URL.includes('products.cevonx.com')
+  ) {
     return process.env.NEXT_PUBLIC_PRODUCT_CALLBACK_URL;
   }
+  return `${getAppBaseUrl(origin)}/auth/callback`;
+}
 
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return `${window.location.origin}/auth/callback`;
-  }
-
-  if (origin) {
-    return `${origin.replace(/\/$/, '')}/auth/callback`;
-  }
-
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ledgerlens.cevonx.com';
-  return `${siteUrl.replace(/\/$/, '')}/auth/callback`;
+/**
+ * Returns the product-specific password reset destination URL for LedgerLens.
+ * Production destination: https://ledgerlens.cevonx.com/auth/reset-password
+ */
+export function getProductResetPasswordUrl(origin?: string): string {
+  return `${getAppBaseUrl(origin)}/auth/reset-password`;
 }
 
 /**

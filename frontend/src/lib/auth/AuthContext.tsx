@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { User, Session } from '@supabase/supabase-js';
 import { getSupabaseBrowserClient } from './client';
 import { AuthContextValue, UserProfile } from './types';
-import { getProductCallbackUrl, isSupabaseAuthConfigured } from './config';
+import { getProductCallbackUrl, getProductResetPasswordUrl, isSupabaseAuthConfigured } from './config';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -106,18 +106,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchProfile]);
 
   // Sign in with Google OAuth
-  const signInWithGoogle = useCallback(async (redirectTo?: string) => {
+  const signInWithGoogle = useCallback(async (_redirectTo?: string) => {
     try {
       const supabase = getSupabaseBrowserClient();
-      const baseCallbackUrl = getProductCallbackUrl();
-      const callbackWithNext = redirectTo
-        ? `${baseCallbackUrl}?next=${encodeURIComponent(redirectTo)}`
-        : baseCallbackUrl;
+      const callbackUrl = getProductCallbackUrl();
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: callbackWithNext,
+          redirectTo: callbackUrl,
           queryParams: {
             access_type: 'offline',
             prompt: 'select_account',
@@ -166,13 +163,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ) => {
     try {
       const supabase = getSupabaseBrowserClient();
-      const baseCallbackUrl = getProductCallbackUrl();
+      const emailRedirectTo = getProductCallbackUrl();
 
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: baseCallbackUrl,
+          emailRedirectTo,
           data: {
             full_name: displayName?.trim() || undefined,
             name: displayName?.trim() || undefined,
@@ -205,8 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPasswordForEmail = useCallback(async (email: string) => {
     try {
       const supabase = getSupabaseBrowserClient();
-      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ledgerlens.cevonx.com';
-      const redirectUrl = `${origin}/auth/reset-password`;
+      const redirectUrl = getProductResetPasswordUrl();
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: redirectUrl,

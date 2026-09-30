@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { User, Session } from '@supabase/supabase-js';
 import { getSupabaseBrowserClient } from './client';
 import { AuthContextValue, UserProfile } from './types';
-import { getProductCallbackUrl, getProductResetPasswordUrl, isSupabaseAuthConfigured } from './config';
+import { getProductCallbackUrl, getProductResetPasswordUrl, isSupabaseAuthConfigured, setPostAuthDestination } from './config';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const token = session?.access_token ?? null;
   activeSessionToken = token;
 
-  const fetchProfile = useCallback(async (userId: string): Promise<UserProfile | null> => {
+  const fetchProfile = useCallback(async (userId: string, currentUser?: User | null): Promise<UserProfile | null> => {
     try {
       const supabase = getSupabaseBrowserClient();
       const { data, error } = await supabase
@@ -34,9 +34,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.warn('Could not fetch user profile from profiles table:', error.message);
-        return null;
       }
-      return data as UserProfile;
+
+      if (data) {
+        return data as UserProfile;
+      }
+
+      // If profile does not exist yet in public.profiles, self-heal by upserting
+      const fallbackName =
+        currentUser?.user_metadata?.full_name ||
+        currentUser?.user_metadata?.name ||
+        currentUser?.email?.split('@')[0] ||
+        'Member';
+
+      const initialProfile = {
+        id: userId,
+        display_name: fallbackName,
+        avatar_url: currentUser?.user_metadata?.avatar_url || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: upserted } = await supabase
+        .from('profiles')
+        .upsert(initialProfile)
+        .select('*')
+        .maybeSingle();
+
+      if (upserted) {
+        return upserted as UserProfile;
+      }
+
+      return {
+        id: userId,
+        display_name: fallbackName,
+        avatar_url: currentUser?.user_metadata?.avatar_url || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
     } catch (err) {
       console.warn('Profile fetch unexpected error:', err);
       return null;
@@ -48,11 +82,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
       return;
     }
-    const updated = await fetchProfile(user.id);
+    const updated = await fetchProfile(user.id, user);
     if (updated) {
       setProfile(updated);
     }
   }, [user, fetchProfile]);
+
 
   useEffect(() => {
     if (!isSupabaseAuthConfigured()) {
@@ -69,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       activeSessionToken = sess?.access_token ?? null;
       setUser(sess?.user ?? null);
       if (sess?.user) {
-        fetchProfile(sess.user.id).then((p) => {
+        fetchProfile(sess.user.id, sess.user).then((p) => {
           setProfile(p);
           setIsLoading(false);
         });
@@ -91,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(currentUser);
 
       if (currentUser) {
-        const p = await fetchProfile(currentUser.id);
+        const p = await fetchProfile(currentUser.id, currentUser);
         setProfile(p);
       } else {
         setProfile(null);
@@ -106,8 +141,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchProfile]);
 
   // Sign in with Google OAuth
-  const signInWithGoogle = useCallback(async (_redirectTo?: string) => {
+  const signInWithGoogle = useCallback(async (redirectTo?: string) => {
     try {
+      if (redirectTo) {
+        setPostAuthDestination(redirectTo);
+      }
       const supabase = getSupabaseBrowserClient();
       const callbackUrl = getProductCallbackUrl();
 
@@ -127,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: new Error(err?.message || 'Failed to initiate Google sign-in') };
     }
   }, []);
+
 
   // Sign in with Email and Password
   const signInWithEmail = useCallback(async (email: string, password: string) => {
@@ -246,17 +285,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const supabase = getSupabaseBrowserClient();
       const { error } = await supabase
         .from('profiles')
-        .update({
+        .upsert({
+          id: user.id,
           ...updates,
           updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id);
+        });
 
       if (error) {
         return { error: new Error(error.message) };
       }
 
-      const updated = await fetchProfile(user.id);
+      // Synchronize display name into user_metadata for session consistency
+      if (updates.display_name) {
+        await supabase.auth.updateUser({
+          data: {
+            full_name: updates.display_name.trim(),
+            name: updates.display_name.trim(),
+          },
+        });
+      }
+
+      const updated = await fetchProfile(user.id, user);
       if (updated) setProfile(updated);
 
       return { error: null };
@@ -280,6 +329,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const displayName =
+    profile?.display_name ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email?.split('@')[0] ||
+    'Member';
+
+  const firstName = displayName.split(' ')[0] || displayName;
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -288,6 +346,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       isAuthenticated: Boolean(user),
       token,
+      displayName,
+      firstName,
       signInWithGoogle,
       signInWithEmail,
       signUpWithEmail,
@@ -303,6 +363,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       isLoading,
       token,
+      displayName,
+      firstName,
       signInWithGoogle,
       signInWithEmail,
       signUpWithEmail,
@@ -313,6 +375,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signOut,
     ]
   );
+
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -15,6 +15,8 @@ export interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   token: string | null;
+  displayName: string;
+  firstName: string;
   signInWithGoogle: (redirectTo?: string) => Promise<{ error: Error | null }>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUpWithEmail: (

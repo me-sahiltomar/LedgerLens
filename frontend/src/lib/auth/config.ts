@@ -96,3 +96,33 @@ export function getSafeRedirectPath(candidate: string | null | undefined, fallba
 
   return fallback;
 }
+
+export const POST_AUTH_DEST_COOKIE = 'cx_post_auth_dest';
+
+/**
+ * Persists the user's intended internal destination before OAuth redirection.
+ */
+export function setPostAuthDestination(path?: string): void {
+  if (typeof document === 'undefined' || !path) return;
+  const safe = getSafeRedirectPath(path, '');
+  if (safe && safe !== '/app' && safe !== '/') {
+    document.cookie = `${POST_AUTH_DEST_COOKIE}=${encodeURIComponent(safe)}; path=/; max-age=300; SameSite=Lax; secure`;
+  }
+}
+
+/**
+ * Retrieves and clears the stored post-auth destination.
+ */
+export function getAndClearPostAuthDestination(fallback = '/app'): string {
+  if (typeof document === 'undefined') return fallback;
+  const cookies = document.cookie.split(';');
+  for (const c of cookies) {
+    const [name, val] = c.trim().split('=');
+    if (name === POST_AUTH_DEST_COOKIE && val) {
+      document.cookie = `${POST_AUTH_DEST_COOKIE}=; path=/; max-age=0; SameSite=Lax; secure`;
+      return getSafeRedirectPath(decodeURIComponent(val), fallback);
+    }
+  }
+  return fallback;
+}
+

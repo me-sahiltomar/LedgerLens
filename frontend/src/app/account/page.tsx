@@ -11,7 +11,9 @@ import {
   Check, 
   Database, 
   FileCheck2, 
+  KeyRound,
   Loader2, 
+  Lock,
   LogOut, 
   ShieldCheck, 
   User as UserIcon 
@@ -19,12 +21,19 @@ import {
 
 export default function AccountPage() {
   const router = useRouter();
-  const { user, profile, isAuthenticated, isLoading, signOut, updateProfile } = useAuth();
+  const { user, profile, isAuthenticated, isLoading, signOut, updateProfile, updatePassword } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -80,10 +89,47 @@ export default function AccountPage() {
     }
   };
 
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || !confirmPassword) {
+      setPasswordError('Please fill in both password fields.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match.');
+      return;
+    }
+
+    setSavingPassword(true);
+    setPasswordError('');
+    setPasswordSuccess(false);
+
+    try {
+      const { error } = await updatePassword(newPassword);
+      if (error) {
+        setPasswordError(formatAuthError(error));
+      } else {
+        setPasswordSuccess(true);
+        setNewPassword('');
+        setConfirmPassword('');
+        setTimeout(() => setPasswordSuccess(false), 3000);
+      }
+    } catch (err: unknown) {
+      setPasswordError(formatAuthError(err) || 'Failed to update password.');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   const handleSignOut = async () => {
     await signOut();
     router.replace('/');
   };
+
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 flex flex-col font-sans">
@@ -211,7 +257,73 @@ export default function AccountPage() {
           </form>
         </div>
 
+        {/* Security & Password Card */}
+        <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-6 backdrop-blur-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <KeyRound className="w-4 h-4 text-zinc-300" />
+            <h2 className="text-sm font-semibold text-zinc-100">Security & Password</h2>
+          </div>
+          <p className="text-xs text-zinc-400 mb-4">
+            Update your account password. If you signed in via Google OAuth, setting a password also enables direct email/password sign-in.
+          </p>
+
+          {passwordError && (
+            <div className="mb-4 p-3 rounded-md bg-rose-950/40 border border-rose-800/80 text-xs text-rose-300">
+              {passwordError}
+            </div>
+          )}
+
+          {passwordSuccess && (
+            <div className="mb-4 p-3 rounded-md bg-emerald-950/40 border border-emerald-800/80 text-xs text-emerald-300 flex items-center gap-2">
+              <Check className="w-4 h-4 text-emerald-400" />
+              <span>Password updated successfully.</span>
+            </div>
+          )}
+
+          <form onSubmit={handleUpdatePassword} className="max-w-md space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
+                New Password
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Minimum 6 characters"
+                className="w-full h-10 px-3 rounded-md bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 text-xs focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
+                Confirm New Password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm your new password"
+                className="w-full h-10 px-3 rounded-md bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 text-xs focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={savingPassword}
+              className="h-9 px-4 rounded-md bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold inline-flex items-center gap-2 transition-colors disabled:opacity-50"
+            >
+              {savingPassword ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Lock className="w-3.5 h-3.5" />
+              )}
+              <span>Update Password</span>
+            </button>
+          </form>
+        </div>
+
         {/* Unified Security & Data Isolation Overview */}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-5">
             <div className="flex items-center gap-2 mb-2 text-zinc-200 font-semibold text-xs">

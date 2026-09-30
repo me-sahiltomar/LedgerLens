@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { formatAuthError } from '@/lib/auth/errors';
-import { AlertCircle, ArrowRight, CheckCircle2, Loader2, Lock, FileCheck2 } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, Loader2, Lock, FileCheck2, RefreshCw } from 'lucide-react';
 
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -13,9 +13,25 @@ export function ResetPasswordForm() {
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [linkExpired, setLinkExpired] = useState(false);
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Check URL hash and search params for errors returned by Supabase
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const hash = window.location.hash;
+    const search = window.location.search;
+    const combined = `${hash}&${search}`;
+
+    if (combined.includes('error=access_denied') || combined.includes('otp_expired') || combined.includes('expired')) {
+      setLinkExpired(true);
+      setErrorMsg('This password recovery link has expired or has already been used. Please request a new recovery link.');
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +71,37 @@ export function ResetPasswordForm() {
       setSubmitting(false);
     }
   };
+
+  if (linkExpired) {
+    return (
+      <div className="w-full max-w-md mx-auto px-4 py-16 sm:py-24">
+        <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-6 sm:p-8 text-center backdrop-blur-sm shadow-xl">
+          <div className="w-12 h-12 rounded-full bg-rose-950/60 border border-rose-800 text-rose-400 mx-auto flex items-center justify-center mb-4">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl font-bold text-zinc-100 mb-2">Link Expired</h2>
+          <p className="text-xs text-zinc-400 leading-relaxed mb-6">
+            For your security, password reset links expire after single use or after their validity window. Please request a fresh link.
+          </p>
+          <div className="space-y-3">
+            <Link
+              href="/auth/forgot-password"
+              className="w-full h-10 px-4 inline-flex items-center justify-center gap-2 rounded-md bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Request New Reset Link</span>
+            </Link>
+            <Link
+              href="/auth/login"
+              className="w-full h-10 px-4 inline-flex items-center justify-center text-xs text-zinc-400 hover:text-white transition-colors"
+            >
+              Back to Sign In
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (success) {
     return (
@@ -111,11 +158,21 @@ export function ResetPasswordForm() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
-              New Password
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-medium text-zinc-300 font-mono">
+                New Password
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-[11px] text-zinc-500 hover:text-zinc-300 inline-flex items-center gap-1 transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                <span>{showPassword ? 'Hide' : 'Show'}</span>
+              </button>
+            </div>
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               required
               autoComplete="new-password"
               value={password}
@@ -130,7 +187,7 @@ export function ResetPasswordForm() {
               Confirm New Password
             </label>
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               required
               autoComplete="new-password"
               value={confirmPassword}
@@ -159,3 +216,4 @@ export function ResetPasswordForm() {
     </div>
   );
 }
+

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { getSafeRedirectPath } from '@/lib/auth/config';
 import { formatAuthError } from '@/lib/auth/errors';
-import { AlertCircle, ArrowRight, CheckCircle2, Loader2, ShieldCheck, FileCheck2 } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, Loader2, ShieldCheck, FileCheck2 } from 'lucide-react';
 
 interface SignupFormProps {
   initialRedirect?: string;
@@ -18,9 +18,11 @@ export function SignupForm({ initialRedirect }: SignupFormProps) {
 
   const { signUpWithEmail, signInWithGoogle, isAuthenticated, isLoading } = useAuth();
 
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successConfirmation, setSuccessConfirmation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -35,7 +37,7 @@ export function SignupForm({ initialRedirect }: SignupFormProps) {
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password || !confirmPassword) {
-      setErrorMsg('Please fill in all fields.');
+      setErrorMsg('Please fill in all required fields.');
       return;
     }
 
@@ -55,8 +57,10 @@ export function SignupForm({ initialRedirect }: SignupFormProps) {
     try {
       const { error, needsEmailConfirmation } = await signUpWithEmail(
         email.trim(),
-        password
+        password,
+        fullName.trim() || undefined
       );
+
 
       if (error) {
         setErrorMsg(formatAuthError(error));
@@ -192,6 +196,20 @@ export function SignupForm({ initialRedirect }: SignupFormProps) {
         <form onSubmit={handleEmailSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
+              Full Name (Optional)
+            </label>
+            <input
+              type="text"
+              autoComplete="name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="e.g. Alex Morgan"
+              className="w-full h-10 px-3 rounded-md bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 text-xs focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
               Email address
             </label>
             <input
@@ -206,11 +224,21 @@ export function SignupForm({ initialRedirect }: SignupFormProps) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
-              Password
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-medium text-zinc-300 font-mono">
+                Password
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-[11px] text-zinc-500 hover:text-zinc-300 inline-flex items-center gap-1 transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                <span>{showPassword ? 'Hide' : 'Show'}</span>
+              </button>
+            </div>
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               required
               autoComplete="new-password"
               value={password}
@@ -225,7 +253,7 @@ export function SignupForm({ initialRedirect }: SignupFormProps) {
               Confirm Password
             </label>
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               required
               autoComplete="new-password"
               value={confirmPassword}
@@ -234,6 +262,7 @@ export function SignupForm({ initialRedirect }: SignupFormProps) {
               className="w-full h-10 px-3 rounded-md bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 text-xs focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
             />
           </div>
+
 
           <button
             type="submit"

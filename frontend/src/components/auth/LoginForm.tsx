@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { getSafeRedirectPath } from '@/lib/auth/config';
 import { formatAuthError } from '@/lib/auth/errors';
-import { AlertCircle, ArrowRight, Loader2, ShieldCheck, FileCheck2 } from 'lucide-react';
+import { AlertCircle, ArrowRight, Eye, EyeOff, Loader2, ShieldCheck, FileCheck2 } from 'lucide-react';
 
 interface LoginFormProps {
   initialRedirect?: string;
@@ -21,9 +21,11 @@ export function LoginForm({ initialRedirect, initialError }: LoginFormProps) {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState(initialError ? formatAuthError(initialError) : '');
   const [submitting, setSubmitting] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
+
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -165,15 +167,25 @@ export function LoginForm({ initialRedirect, initialError }: LoginFormProps) {
               <label className="block text-xs font-medium text-zinc-300 font-mono">
                 Password
               </label>
-              <Link
-                href="/auth/forgot-password"
-                className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
-              >
-                Forgot password?
-              </Link>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-[11px] text-zinc-500 hover:text-zinc-300 inline-flex items-center gap-1 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  <span>{showPassword ? 'Hide' : 'Show'}</span>
+                </button>
+                <Link
+                  href="/auth/forgot-password"
+                  className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
             </div>
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               required
               autoComplete="current-password"
               value={password}
@@ -182,6 +194,7 @@ export function LoginForm({ initialRedirect, initialError }: LoginFormProps) {
               className="w-full h-10 px-3 rounded-md bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 text-xs focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
             />
           </div>
+
 
           <button
             type="submit"

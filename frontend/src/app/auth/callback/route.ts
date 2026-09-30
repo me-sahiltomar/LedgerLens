@@ -18,7 +18,10 @@ export async function GET(request: Request) {
   const error = searchParams.get('error');
   const errorDescription = searchParams.get('error_description');
 
-  const safeNext = getSafeRedirectPath(rawNext, '/app');
+  const cookieHeader = request.headers.get('cookie') || '';
+  const match = cookieHeader.match(/cx_post_auth_dest=([^;]+)/);
+  const cookieDest = match ? decodeURIComponent(match[1]) : null;
+  const safeNext = getSafeRedirectPath(rawNext || cookieDest, '/app');
 
   // Derive guaranteed LedgerLens base origin
   const requestUrl = new URL(request.url);
@@ -49,14 +52,20 @@ export async function GET(request: Request) {
         return NextResponse.redirect(redirectUrl);
       }
 
-      return NextResponse.redirect(new URL(safeNext, baseOrigin));
+      const response = NextResponse.redirect(new URL(safeNext, baseOrigin));
+      response.cookies.delete('cx_post_auth_dest');
+      return response;
     } catch (err: any) {
       console.error('Unexpected error during code exchange:', err);
       const redirectUrl = new URL('/auth/login', baseOrigin);
       redirectUrl.searchParams.set('error', 'Authentication failed. Please try again.');
-      return NextResponse.redirect(redirectUrl);
+      const response = NextResponse.redirect(redirectUrl);
+      response.cookies.delete('cx_post_auth_dest');
+      return response;
     }
   }
 
-  return NextResponse.redirect(new URL('/auth/login', baseOrigin));
+  const response = NextResponse.redirect(new URL('/auth/login', baseOrigin));
+  response.cookies.delete('cx_post_auth_dest');
+  return response;
 }

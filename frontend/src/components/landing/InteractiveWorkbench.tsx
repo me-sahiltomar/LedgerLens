@@ -8,6 +8,8 @@ import {
   SampleExtractionData,
 } from '@/lib/sampleData';
 import { downloadExtractedCsv } from '@/lib/exportCsv';
+import { downloadExtractedMarkdown, copyExtractedMarkdown } from '@/lib/exportMarkdown';
+import { printExtractedReport } from '@/lib/exportPrintPdf';
 import { ingestDocument } from '@/lib/api';
 import {
   Upload,
@@ -15,6 +17,7 @@ import {
   Copy,
   Check,
   Download,
+  Printer,
   ShieldCheck,
   AlertTriangle,
   RefreshCw,
@@ -97,6 +100,7 @@ export function InteractiveWorkbench() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [stepMessage, setStepMessage] = useState('');
   const [copiedJson, setCopiedJson] = useState(false);
+  const [copiedMd, setCopiedMd] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -206,6 +210,22 @@ export function InteractiveWorkbench() {
 
   const handleDownloadCsv = () => {
     downloadExtractedCsv(activeData, activeStatus);
+  };
+
+  const handleDownloadMarkdown = () => {
+    downloadExtractedMarkdown(activeData, activeStatus);
+  };
+
+  const handleCopyMarkdown = async () => {
+    const ok = await copyExtractedMarkdown(activeData, activeStatus);
+    if (ok) {
+      setCopiedMd(true);
+      setTimeout(() => setCopiedMd(false), 2000);
+    }
+  };
+
+  const handlePrintPdf = () => {
+    printExtractedReport(activeData, activeStatus);
   };
 
   const formatConfidence = (val?: number) => {
@@ -464,32 +484,73 @@ export function InteractiveWorkbench() {
                 </div>
 
                 {/* Top-Right Export Action Bar */}
-                <div className="flex items-center gap-2 self-start sm:self-auto">
+                <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
+                  {/* Copy JSON */}
                   <button
                     onClick={handleCopyJson}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-zinc-50 border border-zinc-200 text-xs font-medium text-zinc-800 transition-colors shadow-xs active:bg-zinc-100"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-50 border border-zinc-200 text-xs font-medium text-zinc-800 transition-colors shadow-xs active:bg-zinc-100"
                     title="Copy Pydantic JSON to clipboard"
                   >
                     {copiedJson ? (
                       <>
                         <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="text-emerald-700 font-semibold">Copied JSON</span>
+                        <span className="text-emerald-700 font-semibold">Copied</span>
                       </>
                     ) : (
                       <>
                         <Copy className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>[Copy JSON]</span>
+                        <span>JSON</span>
                       </>
                     )}
                   </button>
 
+                  {/* Download CSV */}
                   <button
                     onClick={handleDownloadCsv}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-zinc-50 border border-zinc-200 text-xs font-semibold text-zinc-800 transition-colors shadow-xs active:bg-zinc-100"
-                    title="Download extracted document as CSV"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-50 border border-zinc-200 text-xs font-semibold text-zinc-800 transition-colors shadow-xs active:bg-zinc-100"
+                    title="Download itemized CSV spreadsheet"
                   >
                     <Download className="w-3.5 h-3.5 text-zinc-500" />
-                    <span>[Download CSV]</span>
+                    <span>CSV</span>
+                  </button>
+
+                  {/* Download Markdown Report */}
+                  <button
+                    onClick={handleDownloadMarkdown}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-50 border border-zinc-200 text-xs font-semibold text-zinc-800 transition-colors shadow-xs active:bg-zinc-100"
+                    title="Download GitHub-Flavored Markdown audit report (.md)"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>MD</span>
+                  </button>
+
+                  {/* Copy Markdown to clipboard */}
+                  <button
+                    onClick={handleCopyMarkdown}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-50 border border-zinc-200 text-xs font-medium text-zinc-700 transition-colors shadow-xs active:bg-zinc-100"
+                    title="Copy Markdown report to clipboard for Notion/Slack/PRs"
+                  >
+                    {copiedMd ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-emerald-700 font-semibold">Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-zinc-500" />
+                        <span>Copy MD</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Print / Save as PDF */}
+                  <button
+                    onClick={handlePrintPdf}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-white hover:bg-zinc-50 border border-zinc-200 text-xs font-semibold text-zinc-800 transition-colors shadow-xs active:bg-zinc-100"
+                    title="Open printable audit sheet or Save as PDF"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>Print / PDF</span>
                   </button>
                 </div>
               </div>

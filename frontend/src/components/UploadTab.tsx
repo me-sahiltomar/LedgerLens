@@ -3,6 +3,9 @@
 import React, { useState, useRef } from 'react';
 import { ingestDocument } from '@/lib/api';
 import { IngestResponse } from '@/types';
+import { downloadExtractedCsv } from '@/lib/exportCsv';
+import { downloadExtractedMarkdown, copyExtractedMarkdown } from '@/lib/exportMarkdown';
+import { printExtractedReport } from '@/lib/exportPrintPdf';
 import {
   Upload,
   FileText,
@@ -11,6 +14,8 @@ import {
   XCircle,
   Copy,
   Check,
+  Download,
+  Printer,
   RefreshCw,
   ShieldAlert,
   ArrowRight,
@@ -35,6 +40,7 @@ export const UploadTab: React.FC<UploadTabProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<IngestResponse | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
+  const [copiedMd, setCopiedMd] = useState<boolean>(false);
   const [showRawJson, setShowRawJson] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -102,6 +108,30 @@ export const UploadTab: React.FC<UploadTabProps> = ({
     navigator.clipboard.writeText(JSON.stringify(result.extracted_data, null, 2));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownloadCsv = () => {
+    if (!result) return;
+    downloadExtractedCsv(result.extracted_data, result.status);
+  };
+
+  const handleDownloadMarkdown = () => {
+    if (!result) return;
+    downloadExtractedMarkdown(result.extracted_data, result.status);
+  };
+
+  const handleCopyMarkdown = async () => {
+    if (!result) return;
+    const ok = await copyExtractedMarkdown(result.extracted_data, result.status);
+    if (ok) {
+      setCopiedMd(true);
+      setTimeout(() => setCopiedMd(false), 2000);
+    }
+  };
+
+  const handlePrintPdf = () => {
+    if (!result) return;
+    printExtractedReport(result.extracted_data, result.status);
   };
 
   const formatConfidence = (val?: number) => {
@@ -307,20 +337,58 @@ export const UploadTab: React.FC<UploadTabProps> = ({
                     </h2>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       onClick={copyToClipboard}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300 transition-colors"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300 transition-colors"
+                      title="Copy JSON to clipboard"
                     >
                       {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copied ? 'Copied' : 'Copy JSON'}</span>
+                      <span>{copied ? 'Copied' : 'JSON'}</span>
                     </button>
+
+                    <button
+                      onClick={handleDownloadCsv}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300 transition-colors"
+                      title="Download CSV spreadsheet"
+                    >
+                      <Download className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>CSV</span>
+                    </button>
+
+                    <button
+                      onClick={handleDownloadMarkdown}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300 transition-colors"
+                      title="Download Markdown audit report (.md)"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>MD</span>
+                    </button>
+
+                    <button
+                      onClick={handleCopyMarkdown}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300 transition-colors"
+                      title="Copy Markdown report to clipboard"
+                    >
+                      {copiedMd ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedMd ? 'Copied MD' : 'Copy MD'}</span>
+                    </button>
+
+                    <button
+                      onClick={handlePrintPdf}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300 transition-colors"
+                      title="Print or Save as PDF"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>Print / PDF</span>
+                    </button>
+
                     <button
                       onClick={() => setShowRawJson(!showRawJson)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300 transition-colors"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300 transition-colors"
                     >
                       <Code className="w-3.5 h-3.5" />
-                      <span>{showRawJson ? 'Hide JSON' : 'Raw JSON'}</span>
+                      <span>{showRawJson ? 'Hide' : 'Raw'}</span>
                     </button>
                   </div>
                 </div>

@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { ArrowRight, ExternalLink, ArrowDown } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 export function EcosystemBar() {
   const { isAuthenticated, user } = useAuth();
@@ -11,35 +11,25 @@ export function EcosystemBar() {
   return (
     <header className="sticky top-0 z-50 h-14 bg-white/95 backdrop-blur-md border-b border-[#E4E4E7] transition-all">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
-        {/* Left: Ecosystem Context & Product Status */}
-        <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto no-scrollbar py-1">
-          <a
-            href="https://productstudio.cevonx.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 hover:text-zinc-950 transition-colors shrink-0"
-          >
-            <span className="text-zinc-400 group-hover:text-zinc-800 transition-colors">&larr;</span>
-            <span>CevonX Product Studio</span>
-          </a>
-
-          <span className="text-zinc-300 font-light select-none">|</span>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-[#18181B] text-[11px] font-bold text-white shadow-xs select-none">
-              C
-            </div>
-            <span className="text-xs font-bold text-[#09090B] tracking-tight">
-              / LedgerLens
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono text-[10px] font-semibold tracking-wide">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>ACTIVE &bull; v1.2</span>
-            </span>
+        {/* Left: Product Brand & Status */}
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 shrink-0 hover:opacity-90 transition-opacity"
+          title="LedgerLens Home"
+        >
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#18181B] text-xs font-bold text-white shadow-xs select-none">
+            C
           </div>
-        </div>
+          <span className="text-sm font-bold text-[#09090B] tracking-tight">
+            LedgerLens
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono text-[10px] font-semibold tracking-wide">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>ACTIVE · v1.2</span>
+          </span>
+        </Link>
 
-        {/* Right: Technical Anchors & External References */}
+        {/* Right: Technical Anchors & Actions */}
         <nav className="flex items-center gap-4 sm:gap-6 shrink-0">
           <div className="hidden md:flex items-center gap-5 text-xs font-medium text-zinc-600">
             <a
@@ -47,14 +37,14 @@ export function EcosystemBar() {
               className="inline-flex items-center gap-1 hover:text-zinc-950 transition-colors"
             >
               <span>Architecture</span>
-              <span className="text-zinc-400">&darr;</span>
+              <span className="text-zinc-400">↓</span>
             </a>
             <a
               href="#changelog"
               className="inline-flex items-center gap-1 hover:text-zinc-950 transition-colors"
             >
               <span>Feature Updates</span>
-              <span className="text-zinc-400">&darr;</span>
+              <span className="text-zinc-400">↓</span>
             </a>
             <a
               href="https://github.com/me-sahiltomar/LedgerLens"
@@ -63,7 +53,7 @@ export function EcosystemBar() {
               className="inline-flex items-center gap-1 hover:text-zinc-950 transition-colors"
             >
               <span>GitHub</span>
-              <span className="text-zinc-400">&nearr;</span>
+              <span className="text-zinc-400">↗</span>
             </a>
             <a
               href="https://sahiltomar.pro"
@@ -72,7 +62,7 @@ export function EcosystemBar() {
               className="inline-flex items-center gap-1 hover:text-zinc-950 transition-colors"
             >
               <span>Architect: Sahil Tomar</span>
-              <span className="text-zinc-400">&nearr;</span>
+              <span className="text-zinc-400">↗</span>
             </a>
           </div>
 

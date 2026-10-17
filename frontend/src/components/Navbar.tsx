@@ -37,7 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-50 h-16 bg-[#09090b]/90 backdrop-blur-md border-b border-white/10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
         {/* CevonX Standard Brand Emblem & Product Title */}
-        <div className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity" title="Back to LedgerLens Overview">
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-xs font-bold text-zinc-950 shadow-xs border border-white/20 select-none">
             C
           </div>
@@ -54,7 +54,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               A CevonX Product
             </span>
           </div>
-        </div>
+        </Link>
 
         {/* Navigation Tabs (Strict 6px rounded-md) */}
         <nav className="flex items-center space-x-1 sm:space-x-1.5" aria-label="Main Navigation">

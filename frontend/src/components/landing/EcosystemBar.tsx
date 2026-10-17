@@ -111,7 +111,7 @@ export function EcosystemBar() {
                   href="/app"
                   className="h-8 px-3 rounded-md bg-[#18181B] hover:bg-zinc-800 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shadow-xs"
                 >
-                  <span>Launch Workspace</span>
+                  <span>Launch Full Workspace</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </>

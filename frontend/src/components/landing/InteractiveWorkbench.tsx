@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useTransition } from 'react';
+import Link from 'next/link';
 import {
   SAMPLE_INVOICES,
   SampleInvoice,
@@ -232,6 +233,19 @@ export function InteractiveWorkbench() {
           <p className="text-sm sm:text-base text-zinc-600 max-w-3xl leading-relaxed">
             Hot-swap between OpenAI, Gemini, and Groq vision models with strict Pydantic v2 JSON schema validation and field-level confidence scoring.
           </p>
+
+          <div className="pt-2 flex flex-wrap items-center gap-3">
+            <Link
+              href="/app"
+              className="h-10 px-5 rounded-md bg-[#18181B] hover:bg-zinc-800 text-white font-semibold text-xs inline-flex items-center gap-2 transition-colors shadow-xs active:bg-zinc-950"
+            >
+              <span>Launch Full Workspace</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+            <span className="font-mono text-xs text-zinc-500">
+              Interactive zero-login sandbox below &darr;
+            </span>
+          </div>
         </div>
 
         {/* 2-Column Interactive Workbench */}

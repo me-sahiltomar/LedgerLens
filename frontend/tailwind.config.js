@@ -19,6 +19,8 @@ module.exports = {
           "sans-serif",
         ],
         mono: [
+          "var(--font-mono)",
+          "JetBrains Mono",
           "ui-monospace",
           "SFMono-Regular",
           "Menlo",

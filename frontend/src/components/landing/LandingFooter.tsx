@@ -60,14 +60,6 @@ export function LandingFooter() {
             >
               GitHub &nearr;
             </a>
-            <a
-              href="https://sahiltomar.pro"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-zinc-950 transition-colors"
-            >
-              Architect: Sahil Tomar &nearr;
-            </a>
             <Link href="/app" className="hover:text-zinc-950 transition-colors">
               Workspace
             </Link>

@@ -55,15 +55,6 @@ export function EcosystemBar() {
               <span>GitHub</span>
               <span className="text-zinc-400">↗</span>
             </a>
-            <a
-              href="https://sahiltomar.pro"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 hover:text-zinc-950 transition-colors"
-            >
-              <span>Architect: Sahil Tomar</span>
-              <span className="text-zinc-400">↗</span>
-            </a>
           </div>
 
           <div className="h-4 w-px bg-zinc-200 hidden md:block" />

@@ -128,7 +128,7 @@ export function ChangelogSection() {
               Need a custom document or PDF extraction pipeline deployed for your team?
             </h3>
             <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
-              We deploy tailored multi-model vision pipelines with custom ERP sync, accounting taxonomy mapping, and deterministic verification gates in a dedicated 7-day sprint.
+              We deploy tailored multi-model vision pipelines with custom ERP sync, accounting taxonomy mapping, and deterministic verification gates through milestone-driven implementations.
             </p>
           </div>
 
@@ -138,7 +138,7 @@ export function ChangelogSection() {
             rel="noopener noreferrer"
             className="h-10 px-5 rounded-md bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs inline-flex items-center gap-2 transition-colors shrink-0 shadow-xs active:bg-zinc-300"
           >
-            <span>Book a 7-Day Sprint via CevonX Core</span>
+            <span>Scope an Implementation via CevonX Core</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
